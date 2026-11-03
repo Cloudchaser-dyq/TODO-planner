@@ -1,0 +1,40 @@
+{
+  "type": "youxu-task-batch",
+  "version": 1,
+  "id": "example-task-batch",
+  "tasks": [
+    {
+      "id": "example-task-001",
+      "title": "示例待办",
+      "category": "生活",
+      "due": "",
+      "totalMinutes": null,
+      "importance": null,
+      "enjoyment": null,
+      "progress": 0,
+      "target": 100,
+      "nextAction": "",
+      "flagged": false,
+      "sourceGroup": "",
+      "kind": "task"
+    },
+    {
+      "id": "example-event-001",
+      "title": "示例固定活动",
+      "category": "生活",
+      "due": "",
+      "totalMinutes": null,
+      "importance": null,
+      "enjoyment": null,
+      "progress": null,
+      "target": null,
+      "nextAction": "",
+      "flagged": false,
+      "sourceGroup": "",
+      "kind": "event",
+      "eventStatus": "pending",
+      "eventEnd": "",
+      "eventLocation": ""
+    }
+  ]
+}

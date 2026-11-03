@@ -1,0 +1,14 @@
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const root = __dirname;
+const dist = path.join(root, 'dist');
+let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
+const css = fs.readFileSync(path.join(dist, 'styles.css'), 'utf8').replace(/<\/style/gi, '<\\/style');
+const sources = ['planner.js', 'data.js', 'imports.js', 'ai.js', 'app.js'].map(name => fs.readFileSync(path.join(dist, name), 'utf8').replace(/<\/script/gi, '<\\/script'));
+html = html.replace('  <link rel="stylesheet" href="styles.css">', () => '  <style>\n' + css + '\n  </style>');
+html = html.replace(/^  <script defer src="(?:planner|data|imports|ai|app)\.js"><\/script>\r?\n/gm, '');
+html = html.replace('</body>', () => sources.map(source => '<script>\n' + source + '\n</script>').join('\n') + '\n</body>');
+const target = path.join(root, '有序.html');
+fs.writeFileSync(target, html, 'utf8');
+console.log('Built standalone HTML: ' + target);

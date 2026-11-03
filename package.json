@@ -1,0 +1,11 @@
+{
+  "name": "youxu-student-planner",
+  "private": true,
+  "version": "1.0.0",
+  "description": "结合课表与个人偏好的学生任务规划器",
+  "scripts": {
+    "build": "node build.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "start": "node preview.cjs"
+  }
+}
