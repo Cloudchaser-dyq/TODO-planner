@@ -154,10 +154,10 @@
     $('free-value').textContent = P.formatMinutes(spentMinutes);
     const nearestDue = state.tasks.filter(task => !D.isEvent(task) && !D.taskMetrics(task).done && task.due).sort((a, b) => a.due.localeCompare(b.due))[0];
     $('planned-value').textContent = nearestDue ? nearestDue.due.slice(5, 10).replace('-', '/') : '暂无';
-    $('budget-label').textContent = nearestDue ? '按你填写的截止日期提醒' : '填写 DDL 后显示';
+    $('budget-label').textContent = nearestDue ? '按已填写的截止日期提醒' : '填写 DDL 后显示';
     $('active-value').textContent = plan.ranked.length + ' 件';
     const reached = state.tasks.filter(task => !D.isEvent(task) && D.taskMetrics(task).stageReached && !D.taskMetrics(task).done);
-    $('stages-label').textContent = reached.length ? reached.length + ' 件本轮已达标' : '阶段目标可以随时调整';
+    $('stages-label').textContent = reached.length ? reached.length + ' 件本轮已达标' : '阶段目标可编辑';
     $('ranking-update').textContent = today ? '更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '预览 ' + selectedDate.slice(5).replace('-', '/');
     $('ranking-title').textContent = today ? '任务实时榜' : '当天任务榜 · 预览';
     $('schedule-title').textContent = today ? '今天的时间安排' : selectedDate.slice(5).replace('-', '/') + ' 的时间安排';
@@ -167,18 +167,18 @@
     if (first) {
       const slot = plan.blocks.find(b => b.kind === 'task' && b.taskId === first.id);
       const workloadKnown = first.remaining != null;
-      $('next-recommendation').innerHTML = '<div class="recommendation"><div class="recommendation-kicker"><span class="live-dot"></span>' + (today ? '当前优先推荐' : '当天优先推荐') + riskMarkup(first.priority) + (first.flagged ? '<span class="risk-tag overdue">重点标记</span>' : '') + '</div><h3 class="recommendation-title">' + esc(first.title) + '</h3><p class="recommendation-action">' + esc(first.nextAction || (workloadKnown ? '先推进一小段，再根据实际进展调整。' : '先确认任务要求与剩余工作量，补充估时和阶段目标后即可安排时间。')) + '</p><div class="recommendation-meta"><span>' + stageText(first) + ' · ' + (workloadKnown ? '本轮约 ' + durationText(first.remaining) : '预计时长待补充') + '</span><span>' + (slot ? '建议 ' + time(slot.start) + ' 开始' : workloadKnown ? '当天暂无可安排空档' : '暂按 DDL 排序') + '</span></div><button class="button primary" data-action="' + (workloadKnown ? 'progress' : 'edit-task') + '" data-id="' + esc(first.id) + '">' + (workloadKnown ? '更新进度 ↗' : '补充任务参数 ↗') + '</button></div>';
+      $('next-recommendation').innerHTML = '<div class="recommendation"><div class="recommendation-kicker"><span class="live-dot"></span>' + (today ? '当前优先任务' : '当天优先任务') + riskMarkup(first.priority) + (first.flagged ? '<span class="risk-tag overdue">重点标记</span>' : '') + '</div><h3 class="recommendation-title">' + esc(first.title) + '</h3><p class="recommendation-action">' + esc(first.nextAction || (workloadKnown ? '按建议时间块执行，并记录实际进度。' : '补充预计用时和阶段目标后生成时间安排。')) + '</p><div class="recommendation-meta"><span>' + stageText(first) + ' · ' + (workloadKnown ? '本轮约 ' + durationText(first.remaining) : '预计时长待补充') + '</span><span>' + (slot ? '建议 ' + time(slot.start) + ' 开始' : workloadKnown ? '当天暂无可安排空档' : '暂按 DDL 排序') + '</span></div><button class="button primary" data-action="' + (workloadKnown ? 'progress' : 'edit-task') + '" data-id="' + esc(first.id) + '">' + (workloadKnown ? '更新进度 ↗' : '补充任务参数 ↗') + '</button></div>';
     } else $('next-recommendation').innerHTML = '';
     $('ranking-list').innerHTML = plan.ranked.length ? plan.ranked.map((task, index) => {
       const priority = task.priority, allocated = plan.allocations[task.id] || 0;
       const missing = missingFields(task), workloadKnown = task.remaining != null;
       return '<article class="rank-card"><div class="rank-top"><span class="rank-number">' + String(index + 1).padStart(2, '0') + '</span><div class="task-main"><div class="task-title">' + esc(task.title) + '</div><div class="task-meta"><span class="task-category">' + esc(task.category) + '</span><span>' + esc(dueText(task)) + '</span>' + riskMarkup(priority) + (task.flagged ? '<span class="risk-tag overdue">重点标记</span>' : '') + '</div></div><span class="score-pill">' + (priority.provisional ? '≈' : '') + Number(priority.score).toFixed(1) + '<small>' + (priority.provisional ? '暂定优先分' : '优先分') + '</small></span></div>' + progressMarkup(task) + '<div class="rank-bottom"><div><p class="rank-reason">' + esc(priority.reason) + '</p><span class="muted small">自动紧急 ' + Number(priority.urgency).toFixed(1) + '/5 · ' + (workloadKnown ? '本轮约 ' + durationText(task.remaining) + ' · 当天安排 ' + P.formatMinutes(allocated) : '待补充：' + esc(missing.join('、'))) + '</span></div><div class="rank-actions"><button class="text-button" data-action="' + (workloadKnown ? 'progress' : 'edit-task') + '" data-id="' + esc(task.id) + '">' + (workloadKnown ? '更新进度' : '补充参数') + '</button><button class="icon-button" data-action="edit-task" data-id="' + esc(task.id) + '" aria-label="编辑' + esc(task.title) + '">⋯</button></div></div></article>';
-    }).join('') : emptyMarkup(state.tasks.some(task => !D.isEvent(task)) ? '这一轮，可以松一口气。' : '现在没有可推进任务。', state.tasks.some(task => !D.isEvent(task)) ? '当前没有待推进的阶段目标。可以提高目标，继续下一步。' : '固定事件按发生时间提醒。需要提前准备时，可以另建备考或准备任务。', 'new-task', '添加可推进任务');
+    }).join('') : emptyMarkup(state.tasks.some(task => !D.isEvent(task)) ? '本轮无待推进任务。' : '没有可推进任务。', state.tasks.some(task => !D.isEvent(task)) ? '当前阶段目标已完成。提高目标可重新加入排序。' : '固定事件按发生时间提醒。备考或准备任务可单独添加。', 'new-task', '添加可推进任务');
     $('stage-reached-list').innerHTML = reached.length ? '<div class="stage-heading">本轮已达标 · ' + reached.length + '</div>' + reached.map(task => '<div class="stage-card"><div><strong>' + esc(task.title) + '</strong><span class="muted small">已到 ' + percent(task.progress) + ' · 整体尚未完成</span></div><button class="text-button" data-action="progress" data-id="' + esc(task.id) + '">设置下一目标 ↗</button></div>').join('') : '';
     const unknownCount = plan.ranked.filter(task => task.remaining == null).length;
     const dateOnlyCount = plan.ranked.filter(task => task.due && task.due.length === 10).length;
     $('plan-warnings').innerHTML = (unknownCount ? '<div class="warning">' + unknownCount + ' 件任务尚未填写估时、进度或本轮目标，已参与 DDL 排名，暂未安排时间块。</div>' : '') + (dateOnlyCount ? '<div class="warning">仅日期的 DDL 暂按当天结束估算。具体提交或考试时刻尚待确认，可在编辑任务中补充。</div>' : '') + plan.warnings.map(w => '<div class="warning">' + esc(w) + '</div>').join('');
-    $('schedule-list').innerHTML = plan.blocks.length ? plan.blocks.map(block => '<div class="schedule-block ' + block.kind + '"><div class="schedule-time">' + time(block.start) + '<span>' + time(block.end) + '</span></div><div class="schedule-content"><div class="schedule-title">' + esc(block.title) + '</div><div class="schedule-meta">' + (block.kind === 'course' || block.kind === 'event' ? (block.kind === 'event' ? '固定事件' : '固定安排') + (block.location ? ' · ' + esc(block.location) : '') : block.kind === 'break' ? '休息一下，再继续' : P.formatMinutes(block.end - block.start) + (block.nextAction ? ' · ' + esc(block.nextAction) : '')) + '</div>' + (block.kind === 'task' ? '<button class="text-button schedule-action" data-action="progress" data-id="' + esc(block.taskId) + '" data-minutes="' + (block.end - block.start) + '">记录这一段 ↗</button>' : '') + '</div></div>').join('') : emptyMarkup('暂时没有时间块', '添加任务和课表，或换一天查看安排。');
+    $('schedule-list').innerHTML = plan.blocks.length ? plan.blocks.map(block => '<div class="schedule-block ' + block.kind + '"><div class="schedule-time">' + time(block.start) + '<span>' + time(block.end) + '</span></div><div class="schedule-content"><div class="schedule-title">' + esc(block.title) + '</div><div class="schedule-meta">' + (block.kind === 'course' || block.kind === 'event' ? (block.kind === 'event' ? '固定事件' : '固定安排') + (block.location ? ' · ' + esc(block.location) : '') : block.kind === 'break' ? '段间休息' : P.formatMinutes(block.end - block.start) + (block.nextAction ? ' · ' + esc(block.nextAction) : '')) + '</div>' + (block.kind === 'task' ? '<button class="text-button schedule-action" data-action="progress" data-id="' + esc(block.taskId) + '" data-minutes="' + (block.end - block.start) + '">记录这一段 ↗</button>' : '') + '</div></div>').join('') : emptyMarkup('暂时没有时间块', '添加任务和课表，或换一天查看安排。');
     renderEvents();
   }
   function filteredTasks() {
@@ -195,8 +195,8 @@
     $('task-list').innerHTML = tasks.length ? tasks.map(task => {
       const m = D.taskMetrics(task);
       if (D.isEvent(task)) return '<article class="task-card event-card"><div class="task-card-top"><span class="task-category">固定事件 · ' + esc(task.category) + '</span><span class="tag">' + eventStateText(task) + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="event-meta">' + esc(eventTimeText(task)) + (task.eventLocation ? ' · ' + esc(task.eventLocation) : '') + '</p>' + (task.nextAction ? '<p class="task-next">' + esc(task.nextAction) + '</p>' : '') + '<p class="muted small">按固定时间参加；备考或准备工作可另外创建任务。</p><div class="task-actions">' + eventActions(task) + '<button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
-      return '<article class="task-card"><div class="task-card-top"><span class="task-category">' + esc(task.category) + '</span><span class="tag">' + (m.done ? '全部完成' : m.stageReached ? '本轮已达标' : m.remaining == null ? '待补充参数' : '正在推进') + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="task-meta">' + esc(dueText(task)) + '</p>' + progressMarkup(task) + '<p class="task-next">' + esc(task.nextAction || '下一步由你决定。') + '</p><div class="muted small">整体预计 ' + durationText(task.totalMinutes) + ' · 本轮 ' + durationText(m.remaining) + (task.sourceGroup ? ' · ' + esc(task.sourceGroup) : '') + '</div><div class="task-actions"><button class="button secondary" data-action="' + (m.remaining == null ? 'edit-task' : 'progress') + '" data-id="' + esc(task.id) + '">' + (m.remaining == null ? '补充参数' : m.stageReached && !m.done ? '设置下一目标' : '更新进度') + '</button><button class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
-    }).join('') : emptyMarkup('这里暂时没有任务', '可以切换筛选，或添加一件准备推进的事。', 'new-task', '添加任务');
+      return '<article class="task-card"><div class="task-card-top"><span class="task-category">' + esc(task.category) + '</span><span class="tag">' + (m.done ? '全部完成' : m.stageReached ? '本轮已达标' : m.remaining == null ? '待补充参数' : '进行中') + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="task-meta">' + esc(dueText(task)) + '</p>' + progressMarkup(task) + '<p class="task-next">' + esc(task.nextAction || '未设置下一步行动。') + '</p><div class="muted small">整体预计 ' + durationText(task.totalMinutes) + ' · 本轮 ' + durationText(m.remaining) + (task.sourceGroup ? ' · ' + esc(task.sourceGroup) : '') + '</div><div class="task-actions"><button class="button secondary" data-action="' + (m.remaining == null ? 'edit-task' : 'progress') + '" data-id="' + esc(task.id) + '">' + (m.remaining == null ? '补充参数' : m.stageReached && !m.done ? '设置下一目标' : '更新进度') + '</button><button class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
+    }).join('') : emptyMarkup('当前筛选无任务', '更换筛选条件或添加任务。', 'new-task', '添加任务');
     if (!options || options.taskTable !== false) renderTaskTable(!!(options && options.forceTable));
   }
   function setTaskListView(view) {
@@ -337,7 +337,7 @@
       const interval = log.startedAt && log.endedAt ? log.startedAt.slice(11) + '—' + (log.endedAt.slice(0, 10) === log.date ? '' : log.endedAt.slice(5, 10).replace('-', '/') + ' ') + log.endedAt.slice(11) : '工作时刻未填写';
       const progress = log.fromProgress != null && log.toProgress != null ? percent(log.fromProgress) + ' → ' + percent(log.toProgress) : log.toProgress != null ? '完成到 ' + percent(log.toProgress) : '';
       return '<article class="log-card"><div class="log-card-heading"><div><h3>' + esc(log.taskTitle) + '</h3><span class="log-clock">' + esc(interval) + ' · ' + (log.minutes == null ? '用时未填写' : P.formatMinutes(log.minutes)) + '</span></div><span class="tag">' + ({ completed: '全部完成', partial: '部分推进', activity: '活动记录' }[log.status]) + '</span></div>' + (progress ? '<span class="log-progress">' + progress + '</span>' : '') + (log.note ? '<p class="log-content">' + esc(log.note) + '</p>' : '') + '<div class="log-card-actions"><span class="muted small">记录于 ' + esc(new Date(log.at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })) + '</span><button class="text-button" data-action="edit-log" data-id="' + esc(log.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-log" data-id="' + esc(log.id) + '">删除</button></div></article>';
-    }).join('') : emptyMarkup('这一天，还没有记录。', '更新任务进度会自动记录，也可以补记完成或推进过的事情。', 'new-log', '补记一条');
+    }).join('') : emptyMarkup('当天无记录。', '更新任务进度会自动记录，也可手动补记。', 'new-log', '补记记录');
   }
   function runLogRetention() {
     if (storageLocked) return false;
@@ -369,7 +369,7 @@
   }
   function openLog(id) {
     const log = state.logs.find(item => item.id === id), f = $('log-form'); f.reset(); $('log-error').textContent = '';
-    $('log-dialog-title').textContent = log ? '编辑记录' : '补记一条';
+    $('log-dialog-title').textContent = log ? '编辑记录' : '补记记录';
     const missingTask = log && log.taskId && !state.tasks.some(task => task.id === log.taskId);
     f.elements.taskId.innerHTML = '<option value="">不关联任务</option>' + (missingTask ? '<option value="' + esc(log.taskId) + '">原任务已删除 · ' + esc(log.taskTitle) + '</option>' : '') + state.tasks.map(task => '<option value="' + esc(task.id) + '">' + esc(task.title) + '</option>').join('');
     f.elements.id.value = log ? log.id : ''; f.elements.date.value = log ? log.date : logDate;
@@ -380,7 +380,7 @@
   function updateWeightLabels() {
     ['importance', 'urgency', 'enjoyment'].forEach(key => { const n = Number($('weight-' + key).value); $('weight-' + key + '-value').textContent = n > 0 ? '+' + n : String(n); });
     const n = Number($('weight-enjoyment').value);
-    $('weight-description').textContent = n < 0 ? '先苦后甜：同等条件下，愉悦评分越低的任务越靠前。' : n > 0 ? '喜欢的优先：愉悦评分越高的任务获得更多分数。' : '愉悦性不参与本次排序。';
+    $('weight-description').textContent = n < 0 ? '低愉悦优先：同等条件下，愉悦评分越低的任务越靠前。' : n > 0 ? '高愉悦优先：愉悦评分越高的任务获得更多分数。' : '愉悦性不参与本次排序。';
   }
   function render(options) {
     $('demo-banner').hidden = storageLocked || !state.demo;
@@ -390,7 +390,7 @@
   function formValues(form) { return Object.fromEntries(new FormData(form)); }
   function openTask(id) {
     const task = state.tasks.find(t => t.id === id), f = $('task-form'); f.reset(); $('task-error').textContent = '';
-    $('task-dialog-title').textContent = task ? '编辑这件事' : '添加一件事';
+    $('task-dialog-title').textContent = task ? '编辑事项' : '添加事项';
     f.elements.id.value = task ? task.id : '';
     f.elements.kind.value = task && D.isEvent(task) ? 'event' : 'task';
     f.elements.duePrecision.value = task && task.due.length > 10 ? 'time' : 'date';
@@ -531,7 +531,7 @@
     const f = $('progress-form'); if (fromRange) f.elements.progress.value = $('progress-range').value;
     const progress = optionalNumber(f.elements.progress.value) ?? 0, target = optionalNumber(f.elements.target.value) ?? 100;
     $('progress-range').value = progress == null ? 0 : progress; $('progress-value').textContent = progress == null ? '待填写' : percent(progress);
-    $('progress-stage-note').textContent = progress == null || target == null ? '可先记录进度；设置本轮目标并补充估时后，便能安排具体时间。' : progress >= 100 ? '已全部完成。保存后从待办榜移出。' : progress >= target ? '本轮已达标。提高目标后，会继续参与排序。' : '本轮还需推进 ' + percent(Math.round((target - progress) * 10) / 10) + '。';
+    $('progress-stage-note').textContent = progress == null || target == null ? '设置阶段目标和预计用时后生成时间安排。' : progress >= 100 ? '已全部完成。保存后从待办榜移出。' : progress >= target ? '本轮已达标。提高目标可重新加入排序。' : '本轮还需推进 ' + percent(Math.round((target - progress) * 10) / 10) + '。';
   }
   function openCourse(id) {
     const course = state.courses.find(c => c.id === id), f = $('course-form'); f.reset(); $('course-error').textContent = '';
@@ -595,7 +595,7 @@
       case 'previous-day': selectedDate = P.addDays(selectedDate, -1); renderLive(); break;
       case 'next-day': selectedDate = P.addDays(selectedDate, 1); renderLive(); break;
       case 'today': selectedDate = P.localDate(); renderLive(); break;
-      case 'fresh-start': ask('开始自己的计划？', '将清空当前浏览器中的任务、课表和投入记录。需要保留时，请先在参数偏好中导出备份。', '清空并开始', () => { const error = commit(rememberImportHistory(D.emptyState(P.localDate())), { replaceProtectedData: true }); if (error) { notify(error); return; } go('tasks'); notify('已准备好，添加你的第一件事吧。'); }); break;
+      case 'fresh-start': ask('清空当前计划？', '将清空当前浏览器中的任务、课表和投入记录。需要保留时，请先在参数偏好中导出备份。', '清空计划', () => { const error = commit(rememberImportHistory(D.emptyState(P.localDate())), { replaceProtectedData: true }); if (error) { notify(error); return; } go('tasks'); notify('当前计划已清空。'); }); break;
       case 'load-demo': ask('载入演示数据？', '当前数据会被替换。需要保留时，请先导出备份。', '载入演示', () => {
         const demo = D.applyTaskProgressDefaults(D.createDemo(P.localDate()));
         if (!demo.ok) { notify(demo.errors.join(' ')); return; }
@@ -662,7 +662,7 @@
     if (!entry.ok) { $('progress-error').textContent = entry.errors.join(' '); return; }
     if (entry.value) next.logs.push(entry.value);
     const error = commit(next); $('progress-error').textContent = error;
-    if (!error) { const metrics = D.taskMetrics(task); $('progress-dialog').close(); notify(metrics.done ? '这件事完成了，给自己一点肯定。' : metrics.stageReached ? '本轮已达标！随时可以设置下一目标。' : '进度已更新，排行榜已重排。'); }
+    if (!error) { const metrics = D.taskMetrics(task); $('progress-dialog').close(); notify(metrics.done ? '任务已完成。' : metrics.stageReached ? '本轮目标已达成。' : '进度已更新，排行榜已重排。'); }
   });
   $('course-form').addEventListener('submit', event => {
     event.preventDefault(); const f = event.currentTarget; if (!f.reportValidity()) return;

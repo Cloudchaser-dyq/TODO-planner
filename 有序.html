@@ -3,29 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#174f46">
-  <meta name="description" content="结合课表与 DDL 的学生任务排行榜。按阶段推进任务，找到现在最值得做的一件事。">
-  <title>有序 · 把重要的事放进今天</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23174f46'/%3E%3Cpath d='M18 32l9 9 20-22' fill='none' stroke='%23fff' stroke-width='6'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#07090d">
+  <meta name="description" content="结合固定安排、截止日期和进度的任务规划器，支持优先级排序、集中编辑和每日记录。">
+  <title>有序 · 任务规划器</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2307090d'/%3E%3Cpath d='M18 32l9 9 20-22' fill='none' stroke='%2386ff64' stroke-width='6'/%3E%3C/svg%3E">
   <style>
 :root {
-  color-scheme: light;
-  --page: #f5f4ef;
-  --paper: #fffefa;
-  --white: #ffffff;
-  --ink: #253b35;
-  --muted: #66735f;
-  --green: #174f46;
-  --green-hover: #103e36;
-  --green-soft: #e9f0e8;
-  --line: #e2e5dc;
-  --amber: #9c6523;
-  --amber-soft: #fcf2dd;
-  --red: #af4d3c;
-  --red-soft: #fbece7;
-  --purple: #75668f;
-  --purple-soft: #eeeaf4;
-  --radius: 16px;
+  color-scheme: dark;
+  --page: #07090d;
+  --paper: #10131b;
+  --surface: #171d28;
+  --input: #0a0e14;
+  --white: #f3f6ff;
+  --ink: #f3f6ff;
+  --muted: #b4becd;
+  --line: #2c3546;
+  --line-strong: #606f83;
+  --green: #83ff8a;
+  --green-hover: #b1ffb6;
+  --green-soft: #10271b;
+  --green-line: #355e43;
+  --purple: #a78bfa;
+  --purple-hover: #c5b0ff;
+  --purple-soft: #1b172b;
+  --purple-line: #51416c;
+  --purple-raised: #261f38;
+  --amber: #f2cd83;
+  --amber-soft: #282115;
+  --amber-line: #6a5731;
+  --red: #ff9ba9;
+  --red-soft: #2b151d;
+  --red-line: #75404c;
+  --shadow: #00000080;
+  --backdrop: #000000cc;
+  --green-halo: #83ff8a14;
+  --purple-halo: #a78bfa18;
+  --radius: 8px;
+  --mono: "Cascadia Code", "SFMono-Regular", Consolas, ui-monospace, monospace;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   font-synthesis: none;
   font-size: 14px;
@@ -34,16 +48,16 @@
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-.flag-option { display: flex; align-items: center; gap: 10px; }
+.flag-option { min-height: 44px; display: flex; align-items: center; gap: 10px; }
 .flag-option input[type="checkbox"] { width: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; padding: 0; accent-color: var(--green); }
 body { margin: 0; background: var(--page); color: var(--ink); }
 button, input, select, textarea { font: inherit; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
-button { color: inherit; cursor: pointer; }
+button { min-height: 44px; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 button, input, select, textarea { outline: none; }
-:focus-visible { outline: 3px solid #87b9a0; outline-offset: 4px; }
-input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: #76a68d; outline: 3px solid #dceadf; outline-offset: 0; }
+:focus-visible { outline: 3px solid var(--purple); outline-offset: 4px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: var(--line-strong); outline: 3px solid var(--purple); outline-offset: 0; }
 button { border: 0; background: none; }
 a { color: inherit; text-decoration: none; }
 svg { flex-shrink: 0; }
@@ -52,190 +66,183 @@ h1 { font-size: clamp(25px, 2.3vw, 34px); line-height: 1.4; font-weight: 650; le
 h2 { font-size: 19px; line-height: 1.45; font-weight: 650; letter-spacing: -.3px; }
 h3 { font-size: 16px; line-height: 1.5; }
 small { font-size: 12px; }
-.sidebar { position: fixed; z-index: 20; inset: 0 auto 0 0; display: flex; flex-direction: column; width: 220px; padding: 34px 20px 25px; background: #eeeee7; border-right: 1px solid #dfe3d8; }
+.sidebar { position: fixed; z-index: 20; inset: 0 auto 0 0; display: flex; flex-direction: column; width: 220px; padding: 28px 18px 22px; background: var(--input); border-right: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 11px; padding: 0 9px; font-size: 25px; font-weight: 700; letter-spacing: 3px; line-height: 1.3; }
-.brand-symbol { display: grid; place-items: center; flex-shrink: 0; width: 43px; height: 43px; border-radius: 13px; color: #fafcf5; background: var(--green); font-size: 24px; font-weight: 500; letter-spacing: 0; }
+.brand-symbol { display: grid; place-items: center; flex-shrink: 0; width: 43px; height: 43px; border-radius: 6px; color: var(--page); background: var(--green); font-size: 24px; font-weight: 500; letter-spacing: 0; }
 .brand > span:last-child { min-width: 0; }
-.brand small { display: block; margin-top: 4px; font-size: 11px; font-weight: 500; letter-spacing: 0; line-height: 1.5; overflow-wrap: anywhere; }
-.sidebar-label { margin: 54px 13px 13px; font-size: 11px; color: #66735f; letter-spacing: 1px; }
+.sidebar-label { margin: 54px 13px 13px; font-size: 11px; color: var(--muted); letter-spacing: 1px; }
 .nav-list { display: grid; gap: 7px; }
-.nav-item { display: flex; gap: 15px; align-items: center; position: relative; width: 100%; min-height: 47px; padding: 10px 15px; border-radius: 10px; text-align: left; color: #66735f; font-size: 14px; white-space: nowrap; transition: background .15s, color .15s; }
+.nav-item { display: flex; gap: 15px; align-items: center; position: relative; width: 100%; min-height: 47px; padding: 10px 15px; border-radius: 10px; text-align: left; color: var(--muted); font-size: 14px; white-space: nowrap; transition: background .15s, color .15s; }
 .nav-item > span { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; opacity: .9; }
-.nav-item:hover { background: #e4e8dd; color: var(--green); }
-.nav-item.active { color: var(--green); background: #dce7db; font-weight: 650; }
-.live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #719879; vertical-align: middle; }
+.nav-item:hover { background: var(--paper); color: var(--green); }
+.nav-item.active { color: var(--green); background: var(--green-soft); font-weight: 650;  border: 1px solid var(--green-line); box-shadow: inset 2px 0 0 var(--green);}
+.live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); vertical-align: middle; }
 .nav-item .live-dot { margin-left: auto; }
-.sidebar-note { margin: auto 15px 45px; padding-top: 64px; }
-.note-line { display: block; width: 25px; height: 2px; margin-bottom: 19px; background: #91a68d; }
-.sidebar-note p { color: #526849; font-size: 18px; line-height: 1.9; letter-spacing: .4px; }
-.sidebar-note small { display: block; color: #66735f; margin-top: 13px; font-size: 11px; letter-spacing: 1.8px; }
-.storage-note { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 17px 9px 0; border-top: 1px solid #d9ded1; font-size: 11px; color: #66735f; }
-.status-dot { width: 5px; height: 5px; border-radius: 50%; background: #7e9977; }
-.storage-note small { flex-basis: 100%; padding-left: 12px; color: #66735f; font-size: 11px; }
-.workspace { max-width: 1720px; min-width: 0; margin-left: 220px; padding: 0 40px; }
+.storage-note { margin-top: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 17px 9px 0; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+.status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+.storage-note small { flex-basis: 100%; padding-left: 12px; color: var(--muted); font-size: 11px; }
+.workspace { max-width: 1720px; min-width: 0; margin-left: 220px; padding: 0 36px 28px; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 100px; border-bottom: 1px solid var(--line); }
 .topbar > div { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
-.eyebrow { color: #66735f; font-size: 11px; line-height: 1.6; letter-spacing: 1.3px; font-weight: 600; }
-.topbar .eyebrow { font-size: 12px; letter-spacing: 1px; color: #66735f; font-weight: 400; }
-.clock { font-size: 12px; color: #66735f; font-variant-numeric: tabular-nums; }
-.button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 41px; padding: 9px 17px; border: 1px solid transparent; border-radius: 9px; font-size: 13px; font-weight: 550; line-height: 1.5; text-align: center; transition: background .15s, border-color .15s, transform .15s; white-space: nowrap; }
-.button.primary { color: #fff; background: var(--green); border-color: var(--green); }
+.eyebrow { color: var(--muted); font-size: 11px; line-height: 1.6; letter-spacing: 1.3px; font-weight: 600;  font-family: var(--mono);}
+.topbar .eyebrow { font-size: 12px; letter-spacing: 1px; color: var(--muted); font-weight: 400; }
+.clock { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;  font-family: var(--mono);}
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 9px 17px; border: 1px solid transparent; border-radius: 9px; font-size: 13px; font-weight: 550; line-height: 1.5; text-align: center; transition: background .15s, border-color .15s, transform .15s; white-space: nowrap; }
+.button.primary { color: var(--page); background: var(--green); border-color: var(--green);  font-weight: 650; box-shadow: 0 0 18px var(--green-halo);}
 .button.primary:hover { background: var(--green-hover); border-color: var(--green-hover); }
-.button.secondary { color: #53654f; background: #fbfcf7; border-color: #dbe1d3; }
-.button.secondary:hover { color: var(--green); background: #edf2e9; border-color: #c6d4bf; }
+.button.secondary { color: var(--ink); background: var(--input); border-color: var(--purple-line); }
+.button.secondary:hover { color: var(--green); background: var(--input); border-color: var(--purple-line); }
 .button:active { transform: translateY(1px); }
-.button.small, .button.sm { min-height: 36px; padding: 7px 12px; font-size: 12px; }
-.icon-button { display: inline-grid; flex-shrink: 0; place-items: center; width: 40px; min-height: 40px; padding: 4px; border-radius: 8px; color: #66735f; font-size: 18px; }
-.icon-button:hover { background: #e9eee2; color: var(--green); }
-.text-button { display: inline-flex; justify-content: center; align-items: center; gap: 5px; min-height: 40px; padding: 6px 4px; color: var(--green); font-size: 12px; font-weight: 550; }
-.text-button:hover { color: #0c7560; text-decoration: underline; text-underline-offset: 4px; }
+.button.small, .button.sm { min-height: 44px; padding: 7px 12px; font-size: 12px; }
+.icon-button { display: inline-grid; flex-shrink: 0; place-items: center; width: 44px; min-height: 44px; padding: 4px; border-radius: 8px; color: var(--muted); font-size: 18px; }
+.icon-button:hover { background: var(--paper); color: var(--green); }
+.text-button { display: inline-flex; justify-content: center; align-items: center; gap: 5px; min-height: 44px; padding: 6px 4px; color: var(--green); font-size: 12px; font-weight: 550; }
+.text-button:hover { color: var(--green); text-decoration: underline; text-underline-offset: 4px; }
 .danger-text { color: var(--red); }
-.danger-text:hover { color: #983426; }
+.danger-text:hover { color: var(--red); }
 .button-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.demo-banner { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-top: 20px; padding: 4px 15px; border: 1px solid #dce4cf; border-radius: 9px; background: #edf1e2; color: #6c795d; font-size: 11px; }
-.demo-banner strong { color: #5b7152; font-weight: 600; }
-.data-protection-banner { color: var(--amber); background: var(--amber-soft); border-color: #e6cc9e; }
+.demo-banner { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-top: 20px; padding: 4px 15px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--muted); font-size: 11px; }
+.demo-banner strong { color: var(--muted); font-weight: 600; }
+.data-protection-banner { color: var(--amber); background: var(--amber-soft); border-color: var(--amber-line); }
 .data-protection-banner strong { color: var(--amber); }
 .demo-banner .text-button { flex-shrink: 0; font-size: 11px; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 32px 0 25px; }
 .page-heading .eyebrow { margin-bottom: 9px; }
-.live-label { display: inline-flex; align-items: center; gap: 5px; margin-left: 12px; color: #66735f; letter-spacing: 0; font-weight: 400; font-size: 11px; }
-.subtitle { margin-top: 8px; color: #66735f; font-size: 12px; line-height: 1.8; }
-.date-picker { display: flex; flex-shrink: 0; align-items: center; gap: 2px; padding: 2px 4px; border: 1px solid #e0e4d8; background: #fafbf5; border-radius: 10px; }
-.date-picker input { width: 129px; min-height: 38px; padding: 3px 5px; border: none; border-radius: 6px; color: #5e7058; background: transparent; font-size: 11px; }
-.date-picker .icon-button { width: 30px; }
+.live-label { display: inline-flex; align-items: center; gap: 5px; margin-left: 12px; color: var(--muted); letter-spacing: 0; font-weight: 400; font-size: 11px; }
+.subtitle { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.date-picker { display: flex; flex-shrink: 0; align-items: center; gap: 2px; padding: 2px 4px; border: 1px solid var(--line-strong); background: var(--input); border-radius: 10px; }
+.date-picker input { width: 129px; min-height: 44px; padding: 3px 5px; border: none; border-radius: 6px; color: var(--muted); background: transparent; font-size: 11px; }
+.date-picker .icon-button { width: 44px; }
 .date-picker .text-button { min-width: 35px; font-size: 11px; }
-.overview-strip { display: grid; grid-template-columns: 1fr 1fr 1fr 1.05fr; margin-bottom: 29px; border: 1px solid #e2e6d9; border-radius: 13px; background: #fbfcf6; overflow: hidden; }
+.overview-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 29px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; }
 .overview-strip > div { min-width: 0; padding: 20px 24px; position: relative; }
-.overview-strip > div + div::before { content: ""; position: absolute; top: 23px; bottom: 23px; left: 0; width: 1px; background: #e4e8db; }
-.metric-label { display: block; color: #66735f; font-size: 12px; }
-.overview-strip strong { display: block; margin: 3px 0 4px; color: #35583f; font-size: 27px; line-height: 1.5; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
-.overview-strip small { color: #66735f; font-size: 11px; }
-.overview-strip .overview-quote { display: flex; justify-content: space-between; align-items: center; padding-left: 30px; color: #66735f; font-size: 13px; line-height: 1.9; }
-.quote-mark { color: #b2bda5; font-size: 32px; font-weight: 300; }
-.event-reminders { margin-bottom: 26px; padding: 22px; border: 1px solid #e3deed; border-radius: var(--radius); background: #fcfbfe; }
+.overview-strip > div + div::before { content: ""; position: absolute; top: 23px; bottom: 23px; left: 0; width: 1px; background: var(--line); }
+.metric-label { display: block; color: var(--muted); font-size: 12px; }
+.overview-strip strong { display: block; margin: 3px 0 4px; color: var(--green); font-size: 27px; line-height: 1.5; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums;  font-family: var(--mono);}
+.overview-strip small { color: var(--muted); font-size: 11px; }
+.event-reminders { margin-bottom: 26px; padding: 22px; border: 1px solid var(--purple-line); border-radius: var(--radius); background: var(--purple-soft); }
 .event-reminders .section-heading { margin-bottom: 16px; }
-.event-reminders .section-heading h2 { color: #665372; font-size: 17px; }
+.event-reminders .section-heading h2 { color: var(--ink); font-size: 17px; }
 .event-reminder-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
-.event-card { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 13px; min-width: 0; padding: 17px; border: 1px solid #e3dcec; border-radius: 11px; background: #f3eff8; }
-.event-date { display: flex; flex-shrink: 0; flex-direction: column; align-items: center; justify-content: center; min-width: 55px; min-height: 56px; padding: 7px; border: 1px solid #ded3e9; border-radius: 8px; background: #fffafd; color: #705c7c; font-size: 21px; line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; }
+.event-card { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 13px; min-width: 0; padding: 17px; border: 1px solid var(--purple-line); border-radius: 8px; background: var(--purple-soft); }
+.event-date { display: flex; flex-shrink: 0; flex-direction: column; align-items: center; justify-content: center; min-width: 55px; min-height: 56px; padding: 7px; border: 1px solid var(--purple-line); border-radius: 8px; background: var(--purple-soft); color: var(--purple-hover); font-size: 21px; line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; }
 .event-date small, .event-date span { font-size: 11px; font-weight: 400; }
 .event-card > div:not(.event-date):not(.event-actions) { flex: 1; min-width: 0; }
-.event-card h3 { color: #594666; font-size: 15px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
-.event-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px; margin-top: 5px; color: #746480; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
-.event-state { display: inline-flex; align-items: center; padding: 3px 8px; border: 1px solid #ded4e9; border-radius: 6px; background: #faf7fd; color: #746480; font-size: 11px; line-height: 1.6; }
+.event-card h3 { color: var(--ink); font-size: 15px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
+.event-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px; margin-top: 5px; color: var(--purple-hover); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.event-state { display: inline-flex; align-items: center; padding: 3px 8px; border: 1px solid var(--purple-line); border-radius: 6px; background: var(--purple-soft); color: var(--purple-hover); font-size: 11px; line-height: 1.6; }
 .event-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 7px; flex-basis: 100%; }
 .event-actions .button, .event-actions .text-button, .event-actions .icon-button { min-height: 44px; }
 .event-actions .button { padding: 8px 12px; font-size: 11px; }
 .event-actions .text-button { padding: 7px; font-size: 11px; }
 .event-actions .icon-button { min-width: 44px; }
-.task-card.event-card { display: block; border-color: #e3dcec; background: #f6f2fa; }
-.task-card.event-card .task-title { color: #594666; }
-.task-card.event-card .task-meta { color: #746480; }
+.task-card.event-card { display: block; border-color: var(--purple-line); background: var(--purple-soft); }
+.task-card.event-card .task-title { color: var(--ink); }
+.task-card.event-card .task-meta { color: var(--purple-hover); }
 #event-fields, #task-work-fields { min-width: 0; }
 #event-fields > .form-grid, #task-work-fields > .form-grid { margin-bottom: 20px; }
 .main-grid { display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr); gap: 22px; align-items: start; }
-.ranking-panel, .schedule-panel { min-width: 0; padding: 24px; border: 1px solid #e0e5d9; border-radius: var(--radius); background: var(--paper); }
+.ranking-panel, .schedule-panel { min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 21px; }
 .section-heading .eyebrow { margin-bottom: 5px; font-size: 11px; letter-spacing: 1.4px; }
 .section-heading h2 { font-size: 17px; }
-.muted { color: #66735f; font-size: 11px; line-height: 1.75; }
+.muted { color: var(--muted); font-size: 11px; line-height: 1.75; }
 .small { font-size: 11px; }
-.tag { display: inline-flex; align-items: center; min-height: 25px; padding: 3px 9px; border: 1px solid #e1e7d8; border-radius: 6px; color: #66735f; background: #f8faf2; font-size: 11px; line-height: 1.5; white-space: nowrap; }
-.recommendation { padding: 21px; margin-bottom: 19px; border: 1px solid #d9e4d3; border-radius: 12px; background: #eaf1e6; }
-.recommendation-kicker { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 11px; color: #66735f; font-size: 11px; letter-spacing: .8px; }
+.tag { display: inline-flex; align-items: center; min-height: 25px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--paper); font-size: 11px; line-height: 1.5; white-space: nowrap; }
+.recommendation { padding: 21px; margin-bottom: 19px; border: 1px solid var(--green-line); border-radius: 8px; background: var(--green-soft);  border-left: 3px solid var(--green);}
+.recommendation-kicker { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 11px; color: var(--green); font-size: 11px; letter-spacing: .8px; }
 .recommendation-kicker .risk-tag { margin-left: auto; letter-spacing: 0; }
-.recommendation-title { margin-bottom: 9px; color: #244c35; font-size: 21px; font-weight: 650; line-height: 1.5; word-break: break-word; }
-.recommendation-action { color: #66735f; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
-.recommendation-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 16px; color: #66735f; font-size: 11px; }
-.recommendation-meta .button { margin-left: auto; min-height: 36px; padding: 7px 13px; font-size: 11px; }
-.recommendation > .button { min-height: 38px; margin-top: 17px; padding: 8px 15px; font-size: 11px; }
+.recommendation-title { margin-bottom: 9px; color: var(--ink); font-size: 21px; font-weight: 650; line-height: 1.5; word-break: break-word; }
+.recommendation-action { color: var(--muted); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.recommendation-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 16px; color: var(--muted); font-size: 11px; }
+.recommendation-meta .button { margin-left: auto; min-height: 44px; padding: 7px 13px; font-size: 11px; }
+.recommendation > .button { min-height: 44px; margin-top: 17px; padding: 8px 15px; font-size: 11px; }
 .ranking-list { display: grid; gap: 11px; }
-.rank-card { padding: 17px 17px 13px; border: 1px solid #e2e6da; border-radius: 11px; background: #fffefa; transition: border-color .15s; }
-.rank-card:hover { border-color: #c9d6bd; }
+.rank-card { padding: 17px 17px 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); transition: border-color .15s; }
+.rank-card:hover { border-color: var(--line); }
 .rank-top { display: flex; align-items: flex-start; gap: 12px; }
-.rank-number { display: grid; place-items: center; flex-shrink: 0; min-width: 26px; height: 27px; margin-top: 1px; border-radius: 7px; color: #66735f; background: #f0f3e9; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.rank-card:first-child .rank-number { background: #dfeada; color: #4e7749; }
+.rank-number { display: grid; place-items: center; flex-shrink: 0; min-width: 26px; height: 27px; margin-top: 1px; border-radius: 7px; color: var(--muted); background: var(--paper); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rank-card:first-child .rank-number { background: var(--paper); color: var(--muted); }
 .task-main { flex: 1; min-width: 0; }
-.task-title { color: #435a3a; font-size: 14px; line-height: 1.65; font-weight: 600; overflow-wrap: anywhere; }
-.task-meta { display: flex; flex-wrap: wrap; gap: 5px 9px; align-items: center; margin-top: 6px; color: #66735f; font-size: 12px; line-height: 1.7; }
-.task-category { display: inline-block; padding: 1px 6px; border-radius: 4px; background: #f1f3eb; color: #66735f; font-size: 11px; white-space: nowrap; }
-.score-pill { display: flex; flex-direction: column; align-items: flex-end; gap: 0; flex-shrink: 0; color: #4f7047; font-size: 18px; font-weight: 650; line-height: 1.4; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.score-pill small { color: #66735f; font-size: 11px; font-weight: 400; line-height: 1.5; }
-.risk-tag { display: inline-flex; align-items: center; min-height: 19px; padding: 1px 6px; border-radius: 4px; font-size: 11px; line-height: 1.6; color: #66735f; background: #eff5e9; }
+.task-title { color: var(--ink); font-size: 14px; line-height: 1.65; font-weight: 600; overflow-wrap: anywhere; }
+.task-meta { display: flex; flex-wrap: wrap; gap: 5px 9px; align-items: center; margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.task-category { display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--paper); color: var(--muted); font-size: 11px; white-space: nowrap; }
+.score-pill { display: flex; flex-direction: column; align-items: flex-end; gap: 0; flex-shrink: 0; color: var(--green); font-size: 18px; font-weight: 650; line-height: 1.4; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.score-pill small { color: var(--green); font-size: 11px; font-weight: 400; line-height: 1.5; }
+.risk-tag { display: inline-flex; align-items: center; min-height: 19px; padding: 1px 6px; border-radius: 4px; font-size: 11px; line-height: 1.6; color: var(--muted); background: var(--paper); }
 .risk-tag.tight { color: var(--amber); background: var(--amber-soft); }
 .risk-tag.overdue { color: var(--red); background: var(--red-soft); }
-.progress-track { position: relative; height: 5px; margin-top: 15px; border-radius: 8px; background: #ebefe3; }
-.progress-fill { position: absolute; inset: 0 auto 0 0; max-width: 100%; border-radius: inherit; background: #8ba87a; transition: width .25s; }
-.target-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; transform: translateX(-1px); background: #7b8c6e; border-radius: 1px; }
-.progress-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 3px 10px; margin-top: 6px; color: #66735f; font-size: 11px; font-variant-numeric: tabular-nums; }
+.progress-track { position: relative; height: 5px; margin-top: 15px; border-radius: 8px; background: var(--surface); }
+.progress-fill { position: absolute; inset: 0 auto 0 0; max-width: 100%; border-radius: inherit; background: var(--green); transition: width .25s; }
+.target-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; transform: translateX(-1px); background: var(--purple); border-radius: 1px; }
+.progress-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 3px 10px; margin-top: 6px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .rank-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; }
 .rank-bottom > div:first-child { flex: 1; min-width: 140px; }
 .rank-bottom > div:first-child > .muted { display: block; margin-top: 3px; font-size: 11px; }
-.rank-reason { flex: 1; min-width: 100px; color: #66735f; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.rank-reason { flex: 1; min-width: 100px; color: var(--muted); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
 .rank-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.rank-actions .button { min-height: 35px; padding: 6px 10px; font-size: 11px; }
-.rank-actions .text-button { min-height: 35px; font-size: 11px; }
-.stage-card { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; padding: 14px 16px; border: 1px dashed #d9e2cc; border-radius: 10px; background: #f7faf0; color: #66735f; font-size: 11px; }
+.rank-actions .button { min-height: 44px; padding: 6px 10px; font-size: 11px; }
+.rank-actions .text-button { min-height: 44px; font-size: 11px; }
+.stage-card { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; padding: 14px 16px; border: 1px dashed var(--green-line); border-radius: 10px; background: var(--green-soft); color: var(--muted); font-size: 11px; }
 .stage-card > div { display: grid; gap: 4px; }
 .stage-card strong { font-size: 14px; font-weight: 550; overflow-wrap: anywhere; }
-.stage-heading { display: flex; justify-content: space-between; gap: 8px; margin-top: 22px; margin-bottom: 8px; color: #66735f; font-size: 11px; font-weight: 550; }
+.stage-heading { display: flex; justify-content: space-between; gap: 8px; margin-top: 22px; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 550; }
 .stage-card .text-button { font-size: 11px; }
 .schedule-panel .section-heading { margin-bottom: 20px; }
 .plan-warnings { display: grid; gap: 8px; }
-.warning { margin-bottom: 13px; padding: 11px 13px; border: 1px solid #efdfbc; border-radius: 8px; background: #fff7e6; color: #a07c3b; font-size: 11px; line-height: 1.8; }
+.warning { margin-bottom: 13px; padding: 11px 13px; border: 1px solid var(--amber-line); border-radius: 8px; background: var(--amber-soft); color: var(--amber); font-size: 11px; line-height: 1.8; }
 .schedule-list { display: grid; gap: 11px; }
-.schedule-block { display: flex; gap: 13px; min-height: 72px; padding: 14px 13px; border: 1px solid #e1e6d9; border-radius: 9px; background: #f8faf3; }
-.schedule-block.course { background: #f2eff7; border-color: #e5dff0; }
-.schedule-block.event { background: #f2eff7; border-color: #e5dff0; }
-.schedule-block.task { background: #eff5e9; border-color: #dfebd6; }
-.schedule-block.break { min-height: 47px; padding-top: 9px; padding-bottom: 9px; background: #fcfcf7; border-color: #eceee2; }
-.schedule-time { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; width: 44px; padding-top: 1px; color: #66735f; font-size: 12px; line-height: 1.7; font-variant-numeric: tabular-nums; }
-.schedule-time small { font-size: 11px; color: #66735f; }
-.schedule-time > span { font-size: 11px; color: #66735f; }
-.course .schedule-time { color: #746480; }
-.course .schedule-time small { color: #746480; }
-.course .schedule-time > span { color: #746480; }
+.schedule-block { display: flex; gap: 13px; min-height: 72px; padding: 14px 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.schedule-block.course { background: var(--purple-soft); border-color: var(--purple-line); }
+.schedule-block.event { background: var(--purple-soft); border-color: var(--purple-line); }
+.schedule-block.task { background: var(--green-soft); border-color: var(--green-line); }
+.schedule-block.break { min-height: 47px; padding-top: 9px; padding-bottom: 9px; background: var(--paper); border-color: var(--line); }
+.schedule-time { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; width: 44px; padding-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+.schedule-time small { font-size: 11px; color: var(--muted); }
+.schedule-time > span { font-size: 11px; color: var(--muted); }
+.course .schedule-time { color: var(--purple-hover); }
+.course .schedule-time small { color: var(--purple-hover); }
+.course .schedule-time > span { color: var(--purple-hover); }
 .schedule-content { flex: 1; min-width: 0; }
-.schedule-title { color: #435a3a; font-size: 14px; font-weight: 550; line-height: 1.6; overflow-wrap: anywhere; }
-.course .schedule-title { color: #746480; }
-.schedule-meta { margin-top: 4px; color: #66735f; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
-.course .schedule-meta { color: #746480; }
-.event .schedule-time, .event .schedule-time small, .event .schedule-time > span, .event .schedule-title, .event .schedule-meta { color: #746480; }
-.schedule-action { display: flex; justify-content: flex-end; gap: 5px; margin-top: 5px; margin-left: auto; min-height: 34px; font-size: 11px; }
-.schedule-action .text-button { min-height: 32px; padding: 4px; font-size: 11px; }
-.panel-footnote { margin-top: 20px; padding-top: 15px; border-top: 1px solid #e8ecdf; color: #66735f; font-size: 11px; line-height: 1.9; }
-.empty-state { display: grid; justify-items: center; padding: 40px 20px; text-align: center; color: #66735f; font-size: 12px; line-height: 1.8; }
-.empty-state h3 { margin: 8px 0; color: #66735f; font-size: 16px; }
+.schedule-title { color: var(--muted); font-size: 14px; font-weight: 550; line-height: 1.6; overflow-wrap: anywhere; }
+.course .schedule-title { color: var(--purple-hover); }
+.schedule-meta { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.course .schedule-meta { color: var(--purple-hover); }
+.event .schedule-time, .event .schedule-time small, .event .schedule-time > span, .event .schedule-title, .event .schedule-meta { color: var(--purple-hover); }
+.schedule-action { display: flex; justify-content: flex-end; gap: 5px; margin-top: 5px; margin-left: auto; min-height: 44px; font-size: 11px; }
+.schedule-action .text-button { min-height: 44px; padding: 4px; font-size: 11px; }
+.panel-footnote { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.9; }
+.empty-state { display: grid; justify-items: center; padding: 40px 20px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.empty-state h3 { margin: 8px 0; color: var(--ink); font-size: 16px; }
 .empty-state .button { margin-top: 18px; }
-.empty-symbol { display: grid; place-items: center; width: 43px; height: 43px; border: 1px solid #d9e3cb; border-radius: 50%; color: #9aaf86; font-size: 24px; line-height: 1; }
+.empty-symbol { display: grid; place-items: center; width: 43px; height: 43px; border: 1px solid var(--line); border-radius: 6px; color: var(--purple); font-size: 24px; line-height: 1; }
 .task-view-switch { margin: 0 0 18px; gap: 7px; }
-.task-view-switch .button { min-height: 42px; }
-.task-view-switch .button[aria-pressed="true"] { border-color: #b8cbb0; background: #e3eddc; color: var(--green); }
+.task-view-switch .button { min-height: 44px; }
+.task-view-switch .button[aria-pressed="true"] { border-color: var(--line); background: var(--paper); color: var(--green); }
 .task-table-panel { min-width: 0; }
-.task-table-help { margin-bottom: 13px; color: #66735f; font-size: 12px; line-height: 1.9; }
+.task-table-help { margin-bottom: 13px; color: var(--muted); font-size: 12px; line-height: 1.9; }
 .task-table-status { margin: -3px 0 12px; color: var(--green); }
 .task-table-status:empty { display: none; }
 #task-table-error { margin: 0 0 13px; }
-.task-table-scroll { position: relative; max-width: 100%; max-height: min(75vh, 820px); overflow: auto; border: 1px solid #dce4d3; border-radius: 13px; background: var(--paper); scrollbar-width: thin; scrollbar-color: #bacbb0 #f3f6ed; }
-.task-table-scroll:focus-visible { outline: 3px solid #87b9a0; outline-offset: 4px; }
+.task-table-scroll { position: relative; max-width: 100%; max-height: min(75vh, 820px); overflow: auto; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--paper); scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--input); }
+.task-table-scroll:focus-visible { outline: 3px solid var(--purple); outline-offset: 4px; }
 .task-edit-table { width: 100%; min-width: 1080px; border-collapse: separate; border-spacing: 0; table-layout: fixed; text-align: left; }
-.task-edit-table th, .task-edit-table td { padding: 14px 12px; border-bottom: 1px solid #e5eadd; font-size: 12px; line-height: 1.7; vertical-align: top; }
-.task-edit-table thead th { position: sticky; top: 0; z-index: 3; padding-top: 13px; padding-bottom: 13px; background: #edf2e5; color: #526c46; font-weight: 600; white-space: normal; }
-.task-edit-table thead th small { display: block; margin-top: 1px; color: #66735f; font-size: 11px; font-weight: 400; }
-.task-edit-table th:first-child, .task-edit-table td:first-child { position: sticky; left: 0; z-index: 2; width: 230px; background: var(--paper); box-shadow: 5px 0 8px -8px #3f573f88; }
-.task-edit-table thead th:first-child { top: 0; z-index: 4; background: #edf2e5; }
+.task-edit-table th, .task-edit-table td { padding: 14px 12px; border-bottom: 1px solid var(--line); font-size: 12px; line-height: 1.7; vertical-align: top; }
+.task-edit-table thead th { position: sticky; top: 0; z-index: 3; padding-top: 13px; padding-bottom: 13px; background: var(--surface); color: var(--muted); font-weight: 600; white-space: normal; }
+.task-edit-table thead th small { display: block; margin-top: 1px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.task-edit-table th:first-child, .task-edit-table td:first-child { position: sticky; left: 0; z-index: 2; width: 230px; background: var(--paper); box-shadow: 5px 0 8px -8px var(--shadow); }
+.task-edit-table thead th:first-child { top: 0; z-index: 4; background: var(--surface); }
 .task-edit-table th:nth-child(2) { width: 230px; }
 .task-edit-table th:nth-child(3) { width: 135px; }
 .task-edit-table th:nth-child(4), .task-edit-table th:nth-child(5) { width: 95px; }
 .task-edit-table th:nth-child(6), .task-edit-table th:nth-child(7) { width: 100px; }
 .task-edit-table th:last-child { width: 95px; }
 .task-edit-table tbody tr:last-child > * { border-bottom: 0; }
-.task-edit-table tbody tr:hover > * { background: #f6f9f0; }
-.table-name { display: block; color: #435a3a; font-size: 14px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
-.table-task-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; margin-top: 7px; color: #66735f; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.task-edit-table tbody tr:hover > * { background: var(--paper); }
+.table-name { display: block; color: var(--ink); font-size: 14px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
+.table-task-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
 .table-date-fields { display: grid; gap: 8px; min-width: 0; }
-.table-date-fields label { color: #66735f; font-size: 11px; line-height: 1.7; }
+.table-date-fields label { color: var(--muted); font-size: 11px; line-height: 1.7; }
 .table-date-fields label input { margin-top: 5px; }
 #task-table-panel input, #task-table-panel select { width: 100%; min-width: 0; min-height: 44px; margin-top: 0; padding: 9px 10px; border-radius: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
 #task-table-panel .table-date-fields label input { margin-top: 5px; }
@@ -243,162 +250,161 @@ small { font-size: 12px; }
 .table-number { max-width: 110px; }
 .table-rating { max-width: 105px; }
 .table-field-error { display: block; margin-top: 6px; color: var(--red); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
-#task-table-panel [aria-invalid="true"], #task-table-panel input.table-field-error, #task-table-panel select.table-field-error { border-color: var(--red); background: #fff7f3; }
-.table-readonly { display: block; padding: 11px 0; color: #746480; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
-.task-edit-table .event-table-row > *, .task-edit-table .event-table-row > :first-child { background: #f6f2fa; }
-.task-edit-table tbody .event-table-row:hover > * { background: #f0eaf6; }
-.event-table-row .table-name { color: #594666; }
-.event-table-row .table-task-meta { color: #746480; }
+#task-table-panel [aria-invalid="true"], #task-table-panel input.table-field-error, #task-table-panel select.table-field-error { border-color: var(--red); background: var(--red-soft); }
+.table-readonly { padding: 11px 0; color: var(--purple-hover); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.task-edit-table .event-table-row > *, .task-edit-table .event-table-row > :first-child { background: var(--purple-soft); }
+.task-edit-table tbody .event-table-row:hover > * { background: var(--purple-soft); }
+.event-table-row .table-name { color: var(--ink); }
+.event-table-row .table-task-meta { color: var(--purple-hover); }
 .task-edit-table td .button, .task-edit-table td .text-button { min-height: 44px; font-size: 12px; }
 .task-edit-table td .text-button { justify-content: flex-start; }
 .task-edit-table td .table-estimate-use { display: block; width: 100%; min-height: 44px; padding: 6px 0; color: var(--green); font-size: 11px; line-height: 1.7; text-align: left; white-space: normal; }
-.table-estimate-use:hover { color: #0c7560; text-decoration: underline; text-underline-offset: 3px; }
-.table-estimate-note { display: block; margin-top: 5px; color: #66735f; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
-#task-table-empty { min-height: 200px; margin-top: 14px; border: 1px solid #e0e6d5; border-radius: 13px; background: var(--paper); }
+.table-estimate-use:hover { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.table-estimate-note { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+#task-table-empty { min-height: 200px; margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
 .task-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.task-card { padding: 22px; border: 1px solid #e0e6d5; border-radius: 13px; background: var(--paper); }
+.task-card { padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
 .task-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .task-card .task-title { font-size: 16px; }
 .task-card .task-meta { margin-top: 8px; }
 .task-card .subtitle { font-size: 11px; }
-.task-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e9eddf; }
-.task-actions .button { min-height: 36px; font-size: 11px; padding: 7px 12px; }
-.task-actions .text-button { min-height: 36px; font-size: 11px; }
+.task-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.task-actions .button { min-height: 44px; font-size: 11px; padding: 7px 12px; }
+.task-actions .text-button { min-height: 44px; font-size: 11px; }
 .task-grid > .empty-state { grid-column: 1 / -1; min-height: 300px; }
 .logs-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px 20px; margin-bottom: 22px; }
 .logs-toolbar > div { min-width: 0; }
-.log-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 15px 28px; padding: 17px 21px; border: 1px solid #e0e6d5; border-radius: 11px; background: #fbfcf6; color: #66735f; font-size: 12px; }
+.log-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 15px 28px; padding: 17px 21px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--muted); font-size: 12px; }
 .log-summary > div { min-width: 70px; }
 .log-summary strong { margin-right: 5px; color: var(--green); font-size: 23px; line-height: 1.5; font-weight: 600; font-variant-numeric: tabular-nums; }
-.log-summary small { color: #66735f; font-size: 11px; }
+.log-summary small { color: var(--muted); font-size: 11px; }
 .log-list { display: grid; gap: 16px; }
-.log-list > .empty-state { min-height: 270px; border: 1px solid #e0e6d5; border-radius: 13px; background: var(--paper); }
-.logs-day-label { margin: 10px 0 0; padding: 7px 1px 0; color: #5c7252; font-size: 13px; line-height: 1.7; font-weight: 600; }
-.log-card { min-width: 0; padding: 21px; border: 1px solid #e0e6d5; border-radius: 13px; background: var(--paper); }
+.log-list > .empty-state { min-height: 270px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.logs-day-label { margin: 10px 0 0; padding: 7px 1px 0; color: var(--muted); font-size: 13px; line-height: 1.7; font-weight: 600; }
+.log-card { min-width: 0; padding: 21px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
 .log-card-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 9px 16px; margin-bottom: 12px; }
 .log-card-heading > div { min-width: 0; }
-.log-card-heading h3, .log-card-heading strong { color: #435a3a; font-size: 15px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
+.log-card-heading h3, .log-card-heading strong { color: var(--ink); font-size: 15px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
 .log-clock { color: var(--green); font-size: 13px; line-height: 1.7; font-weight: 550; font-variant-numeric: tabular-nums; }
 .log-clock small, .log-clock span { font-size: 12px; }
-.log-content { color: #42563d; font-size: 14px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
-.log-progress { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 12px; margin-right: 7px; padding: 4px 9px; border: 1px solid #dfe8d3; border-radius: 6px; background: #eff5e9; color: #5d7750; font-size: 11px; line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.log-card-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e9eddf; }
-.log-card-actions .button { min-height: 40px; padding: 7px 12px; font-size: 11px; }
-.log-card-actions .text-button { min-height: 40px; font-size: 11px; }
+.log-content { color: var(--ink); font-size: 14px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.log-progress { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 12px; margin-right: 7px; padding: 4px 9px; border: 1px solid var(--green-line); border-radius: 6px; background: var(--green-soft); color: var(--muted); font-size: 11px; line-height: 1.7; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.log-card-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--line); }
+.log-card-actions .button { min-height: 44px; padding: 7px 12px; font-size: 11px; }
+.log-card-actions .text-button { min-height: 44px; font-size: 11px; }
 .logs-time-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 18px; }
 #log-dialog textarea { min-height: 120px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
-.course-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; color: #66735f; font-size: 12px; }
-.course-week { display: block; width: 100%; max-width: 100%; max-height: min(70vh, 760px); overflow: auto; border: 1px solid #dfe6d4; border-radius: 12px; background: var(--paper); scrollbar-width: thin; scrollbar-color: #c8d3bc #f3f6ed; }
+.course-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; color: var(--purple-hover); font-size: 12px; }
+.course-week { display: block; width: 100%; max-width: 100%; max-height: min(70vh, 760px); overflow: auto; border: 1px solid var(--purple-line); border-radius: 8px; background: var(--paper); scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--input); }
 .course-timetable { width: 100%; min-width: 1180px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
-.course-timetable-caption { padding: 12px 14px; background: #f9fbf5; color: #66735f; font-size: 11px; line-height: 1.8; text-align: left; }
-.course-timetable th, .course-timetable td { padding: 10px; border-right: 1px solid #e4e9dc; border-bottom: 1px solid #e4e9dc; background: var(--paper); font-size: 12px; line-height: 1.7; vertical-align: top; }
+.course-timetable-caption { padding: 12px 14px; background: var(--purple-soft); color: var(--purple-hover); font-size: 11px; line-height: 1.8; text-align: left; }
+.course-timetable th, .course-timetable td { padding: 10px; border-right: 1px solid var(--purple-line); border-bottom: 1px solid var(--purple-line); background: var(--paper); font-size: 12px; line-height: 1.7; vertical-align: top; }
 .course-timetable tr > :last-child { border-right: 0; }
 .course-timetable tbody tr:last-child > * { border-bottom: 0; }
-.course-timetable thead th { position: sticky; top: 0; z-index: 3; background: #edf2e5; color: #526c46; font-size: 12px; font-weight: 600; text-align: center; }
-.course-timetable th:first-child { position: sticky; left: 0; z-index: 2; width: 72px; background: #f6f8ef; box-shadow: 5px 0 8px -8px #3f573f88; }
-.course-timetable thead th:first-child { z-index: 4; background: #edf2e5; }
-.course-day-heading { color: #526c46; font-size: 12px; font-weight: 600; text-align: center; }
-.course-day-heading small { display: block; margin-top: 3px; color: #66735f; font-size: 11px; font-weight: 400; }
-.course-timetable .course-slot-time { padding-top: 14px; color: #526c46; font-size: 12px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.course-slot-empty { display: block; padding: 18px 0; color: #9aa68e; font-size: 14px; line-height: 1.8; text-align: center; }
+.course-timetable thead th { position: sticky; top: 0; z-index: 3; background: var(--surface); color: var(--purple-hover); font-size: 12px; font-weight: 600; text-align: center; }
+.course-timetable th:first-child { position: sticky; left: 0; z-index: 2; width: 72px; background: var(--purple-soft); box-shadow: 5px 0 8px -8px var(--shadow); }
+.course-timetable thead th:first-child { z-index: 4; background: var(--surface); }
+.course-day-heading { color: var(--purple-hover); font-size: 12px; font-weight: 600; text-align: center; }
+.course-day-heading small { display: block; margin-top: 3px; color: var(--purple-hover); font-size: 11px; font-weight: 400; }
+.course-timetable .course-slot-time { padding-top: 14px; color: var(--purple-hover); font-size: 12px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.course-slot-empty { display: block; padding: 18px 0; color: var(--purple-hover); font-size: 14px; line-height: 1.8; text-align: center; }
 .course-timetable .course-entry { min-height: 44px; margin-bottom: 8px; }
 .course-timetable .course-entry:last-child { margin-bottom: 0; }
-.course-timetable .course-empty { padding: 35px 20px; color: #66735f; font-size: 12px; }
-.course-entry { display: block; width: 100%; margin-bottom: 10px; padding: 11px 9px 9px; border: 1px solid #e3deed; border-radius: 8px; background: #f1eef6; color: #746480; font-size: 11px; line-height: 1.7; text-align: left; overflow-wrap: anywhere; }
-.course-entry:hover { border-color: #cbbfdc; background: #eae4f2; }
+.course-timetable .course-empty { padding: 35px 20px; color: var(--purple-hover); font-size: 12px; }
+.course-entry { display: block; width: 100%; margin-bottom: 10px; padding: 11px 9px 9px; border: 1px solid var(--purple-line); border-radius: 8px; background: var(--purple-soft); color: var(--purple-hover); font-size: 11px; line-height: 1.7; text-align: left; overflow-wrap: anywhere; }
+.course-entry:hover { border-color: var(--purple-line); background: var(--purple-soft); }
 .course-entry button { text-align: left; }
-.course-entry h3, .course-entry strong { display: block; margin-bottom: 5px; color: #746480; font-size: 14px; font-weight: 600; }
-.course-entry .text-button { min-height: 30px; padding: 3px 0; color: #746480; font-size: 11px; }
-.course-time { color: #746480; font-size: 11px; font-variant-numeric: tabular-nums; }
-.course-location, .course-rule { display: block; margin-top: 4px; color: #746480; font-size: 11px; }
-.course-empty { padding-top: 30px; text-align: center; color: #66735f; font-size: 11px; }
-.image-reference { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: center; padding: 28px; margin-top: 26px; border: 1px solid #e0e6d5; border-radius: var(--radius); background: var(--paper); }
+.course-entry h3, .course-entry strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 14px; font-weight: 600; }
+.course-entry .text-button { min-height: 30px; padding: 3px 0; color: var(--green); font-size: 11px; }
+.course-time { color: var(--purple-hover); font-size: 11px; font-variant-numeric: tabular-nums; }
+.course-location, .course-rule { display: block; margin-top: 4px; color: var(--purple-hover); font-size: 11px; }
+.course-empty { padding-top: 30px; text-align: center; color: var(--purple-hover); font-size: 11px; }
+.image-reference { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: center; padding: 28px; margin-top: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
 .image-reference .eyebrow { margin-bottom: 9px; }
 .image-reference .button { margin: 18px 0 10px; }
-.image-preview { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; min-height: 190px; max-height: 500px; overflow: auto; padding: 16px; border: 1px dashed #d6e0ca; border-radius: 11px; background: #f6f9f0; color: #66735f; font-size: 12px; }
+.image-preview { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; min-height: 190px; max-height: 500px; overflow: auto; padding: 16px; border: 1px dashed var(--line); border-radius: 8px; background: var(--input); color: var(--muted); font-size: 12px; }
 .image-preview img { display: block; max-width: 100%; max-height: 460px; object-fit: contain; border-radius: 4px; }
-.image-placeholder { font-size: 38px; font-weight: 300; color: #c0cdb2; }
+.image-placeholder { font-size: 38px; font-weight: 300; color: var(--muted); }
 .file-button { cursor: pointer; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
-.settings-card { padding: 25px; border: 1px solid #e0e6d5; border-radius: var(--radius); background: var(--paper); }
+.settings-card { padding: 25px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
 .settings-card > h2 { margin-bottom: 21px; font-size: 17px; }
 .settings-card > .subtitle { margin-bottom: 20px; }
 .settings-card > .muted { margin-top: 19px; }
 .settings-card .section-heading { margin-bottom: 18px; }
 .preset-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 25px; }
-.preset { min-height: 37px; padding: 7px 12px; border: 1px solid #dce5d2; border-radius: 7px; color: #66735f; background: #f6f9f0; font-size: 11px; }
-.preset:hover, .preset.active { border-color: #b9cda9; background: #e5efda; color: #54763e; }
-.range-label { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 9px; color: #66735f; font-size: 12px; }
-.range-label output { min-width: 37px; color: #4f7744; font-size: 14px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-.range { width: 100%; height: 28px; margin: 0 0 19px; padding: 0; accent-color: #668d53; cursor: pointer; background: transparent; border: 0; }
-.range-endpoints { display: flex; justify-content: space-between; gap: 12px; margin-top: -13px; color: #66735f; font-size: 11px; }
-.settings-note { margin-top: 20px; padding: 13px 15px; border-radius: 8px; background: #f0f5e8; color: #66735f; font-size: 11px; line-height: 1.9; }
-.formula { padding: 13px 15px; margin-top: 12px; border-radius: 8px; background: #f0f5e8; color: #66735f; font-size: 11px; line-height: 1.9; }
-.save-indicator { display: inline-flex; gap: 7px; align-items: center; color: #66735f; font-size: 11px; }
-.save-indicator::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #9db48c; }
-.data-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding-top: 14px; border-top: 1px solid #e7eddd; }
+.preset { min-height: 44px; padding: 7px 12px; border: 1px solid var(--purple-line); border-radius: 7px; color: var(--muted); background: var(--green-soft); font-size: 11px; }
+.preset:hover, .preset.active { border-color: var(--purple-line); background: var(--green-soft); color: var(--green); }
+.range-label { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 9px; color: var(--muted); font-size: 12px; }
+.range-label output { min-width: 37px; color: var(--green); font-size: 14px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.range { width: 100%; height: 44px; margin: 0 0 19px; padding: 0; accent-color: var(--green); cursor: pointer; background: transparent; border: 0; }
+.range-endpoints { display: flex; justify-content: space-between; gap: 12px; margin-top: -13px; color: var(--muted); font-size: 11px; }
+.settings-note { margin-top: 20px; padding: 13px 15px; border-radius: 8px; background: var(--green-soft); color: var(--muted); font-size: 11px; line-height: 1.9; }
+.formula { padding: 13px 15px; margin-top: 12px; border-radius: 8px; background: var(--green-soft); color: var(--muted); font-size: 11px; line-height: 1.9; }
+.save-indicator { display: inline-flex; gap: 7px; align-items: center; color: var(--green); font-size: 11px; }
+.save-indicator::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+.data-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
 .data-actions .text-button { font-size: 11px; }
-label { display: block; color: #66735f; font-size: 12px; }
-label > small { display: inline; margin-left: 5px; color: #66735f; font-size: 11px; font-weight: 400; }
-input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea { display: block; width: 100%; min-width: 0; min-height: 41px; margin-top: 7px; padding: 9px 11px; border: 1px solid #dfe6d4; border-radius: 7px; background: #fffefa; color: #627b53; font-size: 12px; line-height: 1.6; transition: border-color .15s, outline .15s; }
-input::placeholder, textarea::placeholder { color: #66735f; opacity: 1; }
-input[type="date"], input[type="time"], input[type="datetime-local"], input[type="number"] { font-variant-numeric: tabular-nums; }
+label { display: block; color: var(--ink); font-size: 12px; }
+label > small { display: inline; margin-left: 5px; color: var(--muted); font-size: 11px; font-weight: 400; }
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea { display: block; width: 100%; min-width: 0; min-height: 44px; margin-top: 7px; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--input); color: var(--ink); font-size: 12px; line-height: 1.6; transition: border-color .15s, outline .15s; }
+input::placeholder, textarea::placeholder { color: var(--ink); opacity: 1; }
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="number"] { color-scheme: dark; font-variant-numeric: tabular-nums; }
 select { padding-right: 28px; }
 textarea { resize: vertical; }
 .select { width: auto; min-width: 130px; }
-.date-picker input#plan-date { display: block; width: 126px; min-height: 38px; margin: 0; padding: 3px 5px; border: 0; background: transparent; font-size: 11px; }
+.date-picker input#plan-date { display: block; width: 126px; min-height: 44px; margin: 0; padding: 3px 5px; border: 0; background: transparent; font-size: 11px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 18px; }
 .form-error { margin-top: 14px; color: var(--red); font-size: 11px; line-height: 1.8; }
 .form-error:empty { display: none; }
-.dialog { width: min(610px, calc(100vw - 36px)); max-height: calc(100dvh - 48px); padding: 28px; border: 1px solid #dfe7d4; border-radius: 18px; background: #fffefa; color: var(--ink); box-shadow: 0 24px 100px #253b3526; }
-.dialog::backdrop { background: #1e35274d; backdrop-filter: blur(3px); }
+.dialog { width: min(610px, calc(100vw - 36px)); max-height: calc(100dvh - 48px); padding: 28px; border: 1px solid var(--purple-line); border-radius: 10px; background: var(--paper); color: var(--ink); box-shadow: 0 24px 100px var(--shadow); }
+.dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
 .compact-dialog { width: min(480px, calc(100vw - 36px)); }
 .dialog-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 24px; }
 .dialog-heading h2 { font-size: 22px; }
 .dialog-heading .eyebrow { margin-bottom: 7px; font-size: 11px; }
-.dialog-heading .icon-button { min-height: 35px; width: 35px; margin: -5px -6px 0 0; font-size: 25px; }
+.dialog-heading .icon-button { min-height: 44px; width: 44px; margin: -5px -6px 0 0; font-size: 25px; }
 .dialog form > label, .dialog form > .form-grid { margin-bottom: 20px; }
-.dialog-footer { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 25px; padding-top: 19px; border-top: 1px solid #e5edda; }
+.dialog-footer { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 25px; padding-top: 19px; border-top: 1px solid var(--line); }
 .dialog-footer > .danger-text:first-child { margin-right: auto; }
-.estimate-result { display: flex; flex-direction: column; align-items: center; justify-content: center; align-self: stretch; min-height: 69px; padding: 10px; border: 1px solid #e0e8d5; border-radius: 8px; background: #f0f6e7; }
-.estimate-result small { color: #66735f; font-size: 11px; }
-.estimate-result strong { margin-top: 3px; color: #66735f; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.estimate-memory { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin: -5px 0 20px; padding: 12px 15px; border: 1px solid #dce7d2; border-radius: 9px; background: #f0f6e8; }
-.estimate-memory > span { flex: 1; min-width: 170px; color: #5c7450; font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
+.estimate-result { display: flex; flex-direction: column; align-items: center; justify-content: center; align-self: stretch; min-height: 69px; padding: 10px; border: 1px solid var(--green-line); border-radius: 8px; background: var(--green-soft); }
+.estimate-result small { color: var(--muted); font-size: 11px; }
+.estimate-result strong { margin-top: 3px; color: var(--muted); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.estimate-memory { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin: -5px 0 20px; padding: 12px 15px; border: 1px solid var(--green-line); border-radius: 9px; background: var(--green-soft); }
+.estimate-memory > span { flex: 1; min-width: 170px; color: var(--muted); font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
 .estimate-memory .text-button { min-height: 44px; padding: 6px 3px; font-size: 12px; }
-.task-repeat-fields { min-width: 0; margin-bottom: 20px; padding: 15px 17px; border: 1px solid #dfe7d5; border-radius: 10px; background: #f7faf1; }
-.task-repeat-fields > .flag-option { min-height: 44px; color: #566f49; font-size: 13px; font-weight: 550; }
+.task-repeat-fields { min-width: 0; margin-bottom: 20px; padding: 15px 17px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.task-repeat-fields > .flag-option { min-height: 44px; color: var(--muted); font-size: 13px; font-weight: 550; }
 #task-repeat-options { margin-top: 13px; gap: 16px; }
-#task-repeat-preview { grid-column: 1 / -1; color: #66735f; font-size: 11px; line-height: 1.9; overflow-wrap: anywhere; }
-.repeat-help { margin-top: 7px; color: #66735f; font-size: 11px; line-height: 1.9; }
+#task-repeat-preview { grid-column: 1 / -1; color: var(--muted); font-size: 11px; line-height: 1.9; overflow-wrap: anywhere; }
+.repeat-help { margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.9; }
 .ai-dialog { width: min(780px, calc(100vw - 36px)); max-height: calc(100dvh - 40px); overflow-y: auto; }
 .ai-dialog form > .subtitle { margin: -8px 0 22px; }
 .ai-dialog textarea { min-height: 122px; font-size: 14px; line-height: 1.9; }
-.ai-dialog .ai-endpoint { margin: -10px 0 19px; color: #66735f; font-size: 11px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.ai-scope { margin: 0 0 12px; padding: 12px 14px; border: 1px solid #dfe8d4; border-radius: 8px; background: #f2f7eb; color: #5c7450; font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
-.ai-privacy-note { color: #66735f; font-size: 11px; line-height: 1.9; }
+.ai-dialog .ai-endpoint { margin: -10px 0 19px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ai-scope { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--purple-line); border-radius: 8px; background: var(--purple-soft); color: var(--purple-hover); font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
+.ai-privacy-note { color: var(--muted); font-size: 11px; line-height: 1.9; }
 .ai-status { margin-top: 14px; color: var(--green); font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
 .ai-status:empty { display: none; }
 .ai-request-actions { margin-top: 21px; }
 .ai-request-actions > [data-action="clear-ai-key"] { margin-right: auto; }
 .ai-request-actions .button, .ai-request-actions .text-button { min-height: 44px; }
-.ai-preview { margin-top: 25px; padding-top: 22px; border-top: 1px solid #dfe7d4; }
-.ai-preview > h3 { color: #435a3a; font-size: 17px; font-weight: 600; }
-.ai-summary { margin: 8px 0 16px; color: #66735f; font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
+.ai-preview { margin-top: 25px; padding-top: 22px; border-top: 1px solid var(--purple-line); }
+.ai-preview > h3 { color: var(--ink); font-size: 17px; font-weight: 600; }
+.ai-summary { margin: 8px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
 .ai-change-list { display: grid; gap: 12px; }
-.ai-change-card { min-width: 0; padding: 16px; border: 1px solid #dfe7d4; border-radius: 10px; background: #f8faf3; }
-.ai-change-card h4, .ai-change-card strong { margin: 0; color: #435a3a; font-size: 14px; line-height: 1.8; font-weight: 600; overflow-wrap: anywhere; }
-.ai-change-type { display: inline-flex; align-items: center; margin-right: 7px; padding: 2px 7px; border: 1px solid #dbe7ce; border-radius: 5px; background: #eef5e6; color: #5a754c; font-size: 11px; line-height: 1.7; font-weight: 500; }
-.ai-change-fields { display: grid; gap: 6px; margin: 10px 0 0; color: #66735f; font-size: 12px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ai-change-card { min-width: 0; padding: 16px; border: 1px solid var(--purple-line); border-radius: 10px; background: var(--purple-soft); }
+.ai-change-card h4, .ai-change-card strong { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.8; font-weight: 600; overflow-wrap: anywhere; }
+.ai-change-type { display: inline-flex; align-items: center; margin-right: 7px; padding: 2px 7px; border: 1px solid var(--purple-line); border-radius: 5px; background: var(--purple-soft); color: var(--purple-hover); font-size: 11px; line-height: 1.7; font-weight: 500; }
+.ai-change-fields { display: grid; gap: 6px; margin: 10px 0 0; color: var(--purple-hover); font-size: 12px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-change-fields > div, .ai-change-fields p, .ai-change-fields dl, .ai-change-fields dd { margin: 0; }
-.ai-change-fields dt { color: #526e46; font-weight: 550; }
-.ai-change-fields del { color: #9c5748; text-decoration-color: #cda395; }
-.ai-change-fields ins { padding: 1px 4px; border-radius: 3px; background: #e5eedb; color: #456e36; text-decoration: none; }
+.ai-change-fields dt { color: var(--purple-hover); font-weight: 550; }
+.ai-change-fields del { color: var(--red); text-decoration-color: var(--red-line); }
+.ai-change-fields ins { padding: 1px 4px; border-radius: 3px; background: var(--purple-soft); color: var(--purple-hover); text-decoration: none; }
 .ai-preview-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 .ai-preview-actions .button { min-height: 44px; }
-.progress-task-name { margin: -4px 0 21px; font-size: 15px; color: #66735f; overflow-wrap: anywhere; }
-.page-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 15px; margin-top: 40px; padding: 23px 0 26px; border-top: 1px solid #e2e7d9; color: #66735f; font-size: 11px; letter-spacing: .4px; }
-.toast { position: fixed; z-index: 100; bottom: 28px; left: calc(50% + 110px); transform: translateX(-50%); max-width: min(480px, calc(100vw - 40px)); padding: 13px 22px; border: 1px solid #52744a; border-radius: 10px; background: #355b35; color: #f5f8ef; box-shadow: 0 8px 30px #2a40242b; font-size: 12px; text-align: center; }
+.progress-task-name { margin: -4px 0 21px; font-size: 15px; color: var(--muted); overflow-wrap: anywhere; }
+.toast { position: fixed; z-index: 100; bottom: 28px; left: calc(50% + 110px); transform: translateX(-50%); max-width: min(480px, calc(100vw - 40px)); padding: 13px 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--input); color: var(--muted); box-shadow: 0 8px 30px var(--shadow); font-size: 12px; text-align: center; }
 noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; background: var(--amber-soft); color: var(--amber); text-align: center; }
 @media (min-width: 1720px) {
   .workspace { padding-left: 50px; padding-right: 50px; }
@@ -407,12 +413,10 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .sidebar { width: 195px; padding-right: 15px; padding-left: 15px; }
   .workspace { margin-left: 195px; padding: 0 27px; }
   .brand { font-size: 23px; gap: 8px; }
-  .brand small { font-size: 11px; }
   .nav-item { padding-right: 10px; padding-left: 12px; gap: 11px; font-size: 13px; }
   .main-grid { gap: 17px; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
   .ranking-panel, .schedule-panel { padding: 19px; }
   .overview-strip > div { padding-right: 17px; padding-left: 17px; }
-  .overview-strip .overview-quote { padding-left: 20px; font-size: 12px; }
   .page-heading { align-items: flex-start; }
   .date-picker { margin-top: 5px; }
   .toast { left: calc(50% + 97px); }
@@ -424,32 +428,30 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .ranking-panel { padding: 23px; }
   .page-heading { flex-wrap: wrap; row-gap: 18px; }
   .date-picker { margin-top: 0; }
-  .overview-strip { grid-template-columns: repeat(3, 1fr); }
-  .overview-strip .overview-quote { display: none; }
+  .overview-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .task-grid, .settings-grid { grid-template-columns: 1fr; }
   .settings-card { padding: 25px; }
   .image-reference { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
-  .sidebar { position: static; width: 100%; padding: 18px 22px 0; border-right: 0; border-bottom: 1px solid #dce2d2; }
+  .sidebar { position: static; width: 100%; padding: 18px 22px 0; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand { padding: 0; gap: 10px; font-size: 23px; }
   .brand-symbol { width: 36px; height: 36px; border-radius: 10px; font-size: 21px; }
-  .brand small { font-size: 11px; }
-  .sidebar-label, .sidebar-note, .storage-note { display: none; }
+  .sidebar-label, .storage-note { display: none; }
   .nav-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 18px; }
-  .nav-item { justify-content: center; gap: 0; width: auto; min-width: 0; min-height: 43px; padding: 9px 4px 10px; border-radius: 8px 8px 0 0; font-size: 11px; white-space: normal; line-height: 1.5; }
+  .nav-item { justify-content: center; gap: 0; width: auto; min-width: 0; min-height: 44px; padding: 9px 4px 10px; border-radius: 8px 8px 0 0; font-size: 11px; white-space: normal; line-height: 1.5; }
   .nav-item > span { display: none; }
   .nav-item .live-dot { margin-left: 5px; width: 4px; height: 4px; }
-  .nav-item.active { background: #dfe9d8; }
+  .nav-item.active { background: var(--green-soft);  border: 1px solid var(--green-line); box-shadow: inset 2px 0 0 var(--green);}
   .workspace { max-width: 100%; margin-left: 0; padding: 0 22px; }
   .topbar { min-height: 82px; gap: 15px; }
   .topbar > div { display: grid; gap: 2px; }
   .topbar .eyebrow { font-size: 11px; }
-  .clock { font-size: 11px; }
-  .topbar .button { min-height: 39px; padding-right: 12px; padding-left: 12px; font-size: 11px; }
+  .clock { font-size: 11px;  font-family: var(--mono);}
+  .topbar .button { min-height: 44px; padding-right: 12px; padding-left: 12px; font-size: 11px; }
   .demo-banner { gap: 6px; align-items: flex-start; padding: 10px 12px; font-size: 11px; }
   .demo-banner strong { display: block; margin-bottom: 3px; }
-  .demo-banner .text-button { min-height: 34px; font-size: 11px; }
+  .demo-banner .text-button { min-height: 44px; font-size: 11px; }
   .page-heading { margin-top: 28px; margin-bottom: 21px; }
   h1 { font-size: 26px; letter-spacing: -.6px; }
   .page-heading .eyebrow { margin-bottom: 7px; font-size: 11px; }
@@ -458,14 +460,14 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .overview-strip { margin-bottom: 22px; border-radius: 10px; }
   .overview-strip > div { padding: 15px 13px; }
   .metric-label { font-size: 11px; }
-  .overview-strip strong { font-size: 23px; }
+  .overview-strip strong { font-size: 23px;  font-family: var(--mono);}
   .overview-strip small { display: block; font-size: 11px; line-height: 1.7; }
   .overview-strip > div + div::before { top: 18px; bottom: 18px; }
-  .ranking-panel, .schedule-panel { padding: 20px; border-radius: 13px; }
+  .ranking-panel, .schedule-panel { padding: 20px; border-radius: 8px; }
   .section-heading { margin-bottom: 18px; }
   .section-heading h2 { font-size: 16px; }
   .section-heading .eyebrow { font-size: 11px; }
-  .recommendation { padding: 17px; }
+  .recommendation { padding: 17px;  border-left: 3px solid var(--green);}
   .recommendation-title { font-size: 19px; }
   .rank-card { padding: 15px 13px 12px; }
   .rank-top { gap: 9px; }
@@ -479,7 +481,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .schedule-time { width: 47px; font-size: 11px; }
   .schedule-title { font-size: 14px; }
   .schedule-meta { font-size: 11px; }
-  .schedule-action .text-button { min-height: 40px; font-size: 11px; }
+  .schedule-action .text-button { min-height: 44px; font-size: 11px; }
   .task-card { padding: 20px; }
   .task-card .task-title { font-size: 15px; }
   .logs-toolbar { align-items: stretch; gap: 13px; }
@@ -502,12 +504,14 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .settings-card > h2, .settings-card .section-heading h2 { font-size: 16px; }
   .save-indicator { font-size: 11px; }
   .form-grid { gap: 17px 14px; }
-  .page-footer { margin-top: 30px; padding-top: 20px; padding-bottom: 22px; font-size: 11px; }
   .toast { left: 50%; bottom: 21px; width: max-content; font-size: 11px; }
-  .rank-actions .button, .rank-actions .text-button, .task-actions .button, .task-actions .text-button { min-height: 40px; }
-  .course-entry .text-button { min-height: 40px; }
+  .rank-actions .button, .rank-actions .text-button, .task-actions .button, .task-actions .text-button { min-height: 44px; }
+  .course-entry .text-button { min-height: 44px; }
 }
 @media (max-width: 600px) {
+  .overview-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-strip > div:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+  .overview-strip > div:nth-child(3)::before { display: none; }
   .task-view-switch { margin-bottom: 15px; }
   .task-view-switch .button { min-height: 44px; }
   .task-table-help { font-size: 11px; }
@@ -520,7 +524,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .task-edit-table th:last-child { width: 100px; }
   .table-name { font-size: 14px; }
   #task-table-panel input, #task-table-panel select { padding-right: 8px; padding-left: 8px; }
-  .event-reminders { padding: 18px; margin-bottom: 22px; border-radius: 13px; }
+  .event-reminders { padding: 18px; margin-bottom: 22px; border-radius: 8px; }
   .event-reminder-list { grid-template-columns: 1fr; }
   .event-card { padding: 15px; gap: 12px; }
   .event-card h3 { font-size: 14px; }
@@ -542,16 +546,16 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .date-picker input#plan-date { flex: 1; width: 135px; min-width: 0; max-width: 160px; }
   .date-picker .text-button { margin-left: auto; }
   .overview-strip > div { padding-right: 10px; padding-left: 12px; }
-  .overview-strip strong { margin-top: 6px; font-size: 21px; }
+  .overview-strip strong { margin-top: 6px; font-size: 21px;  font-family: var(--mono);}
   .overview-strip small { font-size: 11px; }
   .ranking-panel, .schedule-panel { padding: 17px; }
-  .recommendation { padding: 16px; }
+  .recommendation { padding: 16px;  border-left: 3px solid var(--green);}
   .recommendation-kicker { font-size: 11px; }
   .recommendation-title { font-size: 18px; }
   .recommendation-action { font-size: 11px; }
   .recommendation-meta { gap: 8px; font-size: 11px; }
-  .recommendation-meta .button { width: 100%; margin-left: 0; margin-top: 5px; min-height: 40px; }
-  .recommendation > .button { width: 100%; min-height: 40px; margin-top: 15px; }
+  .recommendation-meta .button { width: 100%; margin-left: 0; margin-top: 5px; min-height: 44px; }
+  .recommendation > .button { width: 100%; min-height: 44px; margin-top: 15px; }
   .rank-card { padding: 14px 12px 11px; }
   .rank-top { gap: 8px; }
   .rank-number { min-width: 21px; height: 23px; }
@@ -574,7 +578,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .log-card-actions .text-button { padding-right: 7px; padding-left: 7px; }
   .image-reference { padding: 20px; }
   .image-reference h2 { font-size: 17px; }
-  .dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 23px 21px; border-radius: 15px; }
+  .dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 23px 21px; border-radius: 8px; }
   .dialog-heading { margin-bottom: 21px; }
   .dialog-heading h2 { font-size: 21px; }
   .dialog form > label, .dialog form > .form-grid { margin-bottom: 18px; }
@@ -599,9 +603,12 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .ai-change-card { padding: 14px; }
   .ai-change-fields { font-size: 12px; }
   .ai-preview-actions .button { width: 100%; }
-  .page-footer { gap: 12px; font-size: 11px; }
 }
 @media (max-width: 380px) {
+  .overview-strip { grid-template-columns: 1fr; }
+  .overview-strip > div:nth-child(3) { grid-column: auto; }
+  .overview-strip > div + div { border-top: 1px solid var(--line); }
+  .overview-strip > div + div::before { display: none; }
   .nav-list { gap: 3px; }
   .nav-item .live-dot { display: none; }
   .page-heading .eyebrow { letter-spacing: .6px; }
@@ -616,9 +623,9 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .topbar { gap: 10px; }
   .topbar > div { min-width: 0; }
   .topbar .button { flex-shrink: 0; padding-right: 10px; padding-left: 10px; }
-  .clock { overflow-wrap: anywhere; }
+  .clock { overflow-wrap: anywhere;  font-family: var(--mono);}
   .demo-banner { flex-wrap: wrap; }
-  .demo-banner .text-button { min-height: 40px; }
+  .demo-banner .text-button { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
@@ -628,32 +635,31 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
 </head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="#live" aria-label="有序首页"><span class="brand-symbol">序</span><span>有序<small>YOUR TIME, IN ORDER</small></span></a>
-    <div class="sidebar-label">我的工作台</div>
+    <a class="brand" href="#live" aria-label="有序首页"><span class="brand-symbol">序</span><span>有序<small>TASK PLANNER</small></span></a>
+    <div class="sidebar-label">工作台</div>
     <nav class="nav-list" aria-label="主导航">
       <button class="nav-item active" data-view="live" aria-current="page"><span>01</span>实时榜<i class="live-dot"></i></button>
       <button class="nav-item" data-view="tasks"><span>02</span>任务清单</button>
       <button class="nav-item" data-view="logs"><span>03</span>每日记录</button>
-      <button class="nav-item" data-view="courses"><span>04</span>我的课表</button>
-      <button class="nav-item" data-view="settings"><span>05</span>参数偏好</button>
+      <button class="nav-item" data-view="courses"><span>04</span>固定安排</button>
+      <button class="nav-item" data-view="settings"><span>05</span>参数设置</button>
     </nav>
-    <div class="sidebar-note"><span class="note-line"></span><p>事情很多，<br>一次推进一小步。</p><small>课业 · 实习 · 生活</small></div>
-    <div class="storage-note"><span class="status-dot"></span><span id="storage-status">已保存在当前浏览器</span><small>可在参数偏好中导出备份</small></div>
+    <div class="storage-note"><span class="status-dot"></span><span id="storage-status">已保存在当前浏览器</span><small>可在参数设置中导出备份</small></div>
   </aside>
   <main class="workspace">
-    <header class="topbar"><div><span class="eyebrow">给生活留一点余地</span><span id="clock" class="clock"></span></div><button class="button primary" data-action="new-task"><span aria-hidden="true">＋</span> 添加事项</button></header>
-    <div id="demo-banner" class="demo-banner"><span><strong>正在体验演示数据</strong>　试试修改进度、目标和权重，观察排名变化。</span><button class="text-button" data-action="fresh-start">开始我的计划 ↗</button></div>
-    <div id="data-protection-banner" class="demo-banner data-protection-banner" role="alert" hidden><span><strong>已暂停写入，保护原有数据</strong>　当前数据暂时无法读取，显示的是预览。请先导出原始数据，再到参数偏好中处理备份。</span><button class="text-button" data-action="export-backup">导出原始数据</button></div>
+    <header class="topbar"><div><span class="eyebrow">任务控制台</span><span id="clock" class="clock"></span></div><button class="button primary" data-action="new-task"><span aria-hidden="true">＋</span> 添加事项</button></header>
+    <div id="demo-banner" class="demo-banner"><span><strong>演示数据</strong>　修改进度、目标或权重可查看排序变化。</span><button class="text-button" data-action="fresh-start">清空并新建</button></div>
+    <div id="data-protection-banner" class="demo-banner data-protection-banner" role="alert" hidden><span><strong>已暂停写入，保护原有数据</strong>　当前数据暂时无法读取，显示的是预览。请先导出原始数据，再到参数设置中处理备份。</span><button class="text-button" data-action="export-backup">导出原始数据</button></div>
 
     <section id="view-live" class="view active" aria-labelledby="live-title">
-      <div class="page-heading"><div><p class="eyebrow">LIVE PRIORITIES <span class="live-label"><i class="live-dot"></i>每分钟刷新</span></p><h1 id="live-title">现在，先做哪一件？</h1><p class="subtitle">跟着截止时间走，也按自己的节奏推进。</p></div><div class="date-picker"><button class="icon-button" data-action="previous-day" aria-label="前一天">←</button><input id="plan-date" type="date" aria-label="安排日期"><button class="icon-button" data-action="next-day" aria-label="后一天">→</button><button class="text-button" data-action="today">今天</button></div></div>
-      <div class="overview-strip"><div><span class="metric-label">当天已记录用时</span><strong id="free-value">—</strong><small>以每日记录为准</small></div><div><span class="metric-label">最近截止日期</span><strong id="planned-value">—</strong><small id="budget-label">按你填写的 DDL 提醒</small></div><div><span class="metric-label">待推进任务</span><strong id="active-value">—</strong><small id="stages-label">阶段目标可以随时调整</small></div><div class="overview-quote"><span>小步推进，<br>也算认真前行。</span><span class="quote-mark" aria-hidden="true">↗</span></div></div>
-      <section id="event-reminders" class="event-reminders" aria-labelledby="event-reminders-title" hidden><div class="section-heading"><div><p class="eyebrow">AT A FIXED TIME</p><h2 id="event-reminders-title">固定事件提醒</h2></div><span class="muted small">考试、会议等按发生时间提醒</span></div><div id="event-reminder-list" class="event-reminder-list"></div></section>
-      <div class="main-grid"><section class="ranking-panel" aria-labelledby="ranking-title"><div class="section-heading"><div><p class="eyebrow">WHAT MATTERS NOW</p><h2 id="ranking-title">任务实时榜</h2></div><span id="ranking-update" class="muted"></span></div><div id="next-recommendation"></div><div id="ranking-list" class="ranking-list"></div><div id="stage-reached-list"></div></section><aside class="schedule-panel"><div class="section-heading"><div><p class="eyebrow">MAKE ROOM FOR IT</p><h2 id="schedule-title">今天的时间安排</h2></div><span id="week-label" class="tag"></span></div><div id="plan-warnings" class="plan-warnings"></div><div id="schedule-list" class="schedule-list"></div><p class="panel-footnote">按当前进度重新安排。完成一段后，更新百分比即可。</p></aside></div>
+      <div class="page-heading"><div><p class="eyebrow">PRIORITY <span class="live-label"><i class="live-dot"></i>每分钟刷新</span></p><h1 id="live-title">实时优先级</h1><p class="subtitle">按截止日期、重要性和任务参数排序。</p></div><div class="date-picker"><button class="icon-button" data-action="previous-day" aria-label="前一天">←</button><input id="plan-date" type="date" aria-label="安排日期"><button class="icon-button" data-action="next-day" aria-label="后一天">→</button><button class="text-button" data-action="today">今天</button></div></div>
+      <div class="overview-strip"><div><span class="metric-label">当天已记录用时</span><strong id="free-value">—</strong><small>以每日记录为准</small></div><div><span class="metric-label">最近截止日期</span><strong id="planned-value">—</strong><small id="budget-label">按你填写的 DDL 提醒</small></div><div><span class="metric-label">待推进任务</span><strong id="active-value">—</strong><small id="stages-label">按本轮目标统计</small></div></div>
+      <section id="event-reminders" class="event-reminders" aria-labelledby="event-reminders-title" hidden><div class="section-heading"><div><p class="eyebrow">FIXED EVENT</p><h2 id="event-reminders-title">固定事件提醒</h2></div><span class="muted small">考试、会议等按发生时间提醒</span></div><div id="event-reminder-list" class="event-reminder-list"></div></section>
+      <div class="main-grid"><section class="ranking-panel" aria-labelledby="ranking-title"><div class="section-heading"><div><p class="eyebrow">PRIORITY</p><h2 id="ranking-title">任务实时榜</h2></div><span id="ranking-update" class="muted"></span></div><div id="next-recommendation"></div><div id="ranking-list" class="ranking-list"></div><div id="stage-reached-list"></div></section><aside class="schedule-panel"><div class="section-heading"><div><p class="eyebrow">SCHEDULE</p><h2 id="schedule-title">今天的时间安排</h2></div><span id="week-label" class="tag"></span></div><div id="plan-warnings" class="plan-warnings"></div><div id="schedule-list" class="schedule-list"></div><p class="panel-footnote">按当前进度生成时间块；更新进度后重新排程。</p></aside></div>
     </section>
 
     <section id="view-tasks" class="view" aria-labelledby="tasks-title" hidden>
-      <div class="page-heading"><div><p class="eyebrow">ONE STEP AT A TIME</p><h1 id="tasks-title">每件事，都有下一步。</h1><p class="subtitle">任务默认从 0% 推进到 100%。在表格中集中补充参数，也能随时调整本轮目标。</p></div><div class="button-row"><button type="button" class="button secondary" data-action="open-ai">AI 修改任务</button><label class="button secondary file-button">批量追加任务<input id="task-batch-import" type="file" accept=".json,application/json" hidden></label><select id="task-filter" class="select" aria-label="筛选任务"><option value="active">待完成</option><option value="reached">本轮已达标</option><option value="done">已完成 / 已结束</option><option value="events">固定事件</option><option value="all">全部任务</option></select></div></div>
+      <div class="page-heading"><div><p class="eyebrow">TASKS</p><h1 id="tasks-title">任务清单</h1><p class="subtitle">集中编辑截止日期、估时、进度和目标；离开输入框自动保存。</p></div><div class="button-row"><button type="button" class="button secondary" data-action="open-ai">AI 修改任务</button><label class="button secondary file-button">批量追加任务<input id="task-batch-import" type="file" accept=".json,application/json" hidden></label><select id="task-filter" class="select" aria-label="筛选任务"><option value="active">待完成</option><option value="reached">本轮已达标</option><option value="done">已完成 / 已结束</option><option value="events">固定事件</option><option value="all">全部任务</option></select></div></div>
       <div class="button-row task-view-switch" role="group" aria-label="任务查看方式"><button id="task-table-toggle" class="button secondary" type="button" data-action="task-table-view" aria-pressed="true" aria-controls="task-table-panel">表格编辑</button><button id="task-cards-toggle" class="button secondary" type="button" data-action="task-cards-view" aria-pressed="false" aria-controls="task-list">卡片视图</button></div>
       <div id="task-table-panel" class="task-table-panel">
         <p id="task-table-help" class="task-table-help">直接填预计用时、进度和目标，离开输入框自动保存。Enter 同列下一行，Tab 下一格。时刻可留空。</p>
@@ -667,28 +673,28 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       <div id="task-list" class="task-grid" hidden></div>
     </section>
 
-    <section id="view-courses" class="view" aria-labelledby="courses-title" hidden><div class="page-heading"><div><p class="eyebrow">YOUR WEEK, YOUR RHYTHM</p><h1 id="courses-title">先把固定时间留出来。</h1><p class="subtitle">课程、实习坐班、固定活动都可以加入，排程会自动避开。</p></div><button class="button primary" data-action="new-course">＋ 添加课程 / 固定安排</button></div><div class="course-toolbar"><span id="semester-description"></span><div class="button-row"><label class="button secondary file-button">导入课程 CSV<input id="course-import" type="file" accept=".csv,text/csv" hidden></label><button class="button secondary" data-action="export-courses">导出 CSV</button></div></div><div id="course-week" class="course-week" role="region" aria-label="每周课程" tabindex="0"></div><div class="image-reference"><div><p class="eyebrow">FROM YOUR TIMETABLE</p><h2>对照课表图片，录入一次。</h2><p class="subtitle">选择图片后，对照填写课程、星期和时间。支持单双周与起止周。</p><label class="button secondary file-button">选择课表图片<input id="timetable-image" type="file" accept="image/*" hidden></label><p class="muted small">图片仅用于对照，不自动识别；本次打开期间可查看。</p></div><div id="image-preview" class="image-preview"><span class="image-placeholder" aria-hidden="true">▦</span><span>你的课表图片</span></div></div></section>
+    <section id="view-courses" class="view" aria-labelledby="courses-title" hidden><div class="page-heading"><div><p class="eyebrow">TIMETABLE</p><h1 id="courses-title">固定安排</h1><p class="subtitle">录入课程及固定活动，任务排程自动避开对应时段。</p></div><button class="button primary" data-action="new-course">＋ 添加课程 / 固定安排</button></div><div class="course-toolbar"><span id="semester-description"></span><div class="button-row"><label class="button secondary file-button">导入课程 CSV<input id="course-import" type="file" accept=".csv,text/csv" hidden></label><button class="button secondary" data-action="export-courses">导出 CSV</button></div></div><div id="course-week" class="course-week" role="region" aria-label="每周课程" tabindex="0"></div><div class="image-reference"><div><p class="eyebrow">TIMETABLE IMPORT</p><h2>课表图片对照录入</h2><p class="subtitle">选择图片后，对照填写课程、星期和时间。支持单双周与起止周。</p><label class="button secondary file-button">选择课表图片<input id="timetable-image" type="file" accept="image/*" hidden></label><p class="muted small">图片仅用于对照，不自动识别；本次打开期间可查看。</p></div><div id="image-preview" class="image-preview"><span class="image-placeholder" aria-hidden="true">▦</span><span>课表图片预览</span></div></div></section>
 
-    <section id="view-settings" class="view" aria-labelledby="settings-title" hidden><div class="page-heading"><div><p class="eyebrow">TUNE IT TO YOUR LIFE</p><h1 id="settings-title">让规则，适合你。</h1><p class="subtitle">权重改变排序，课表和截止风险决定能否及时完成。</p></div><span class="save-indicator">更改后自动保存</span></div><form id="settings-form"><div class="settings-grid"><section class="settings-card"><div class="section-heading"><h2>排序权重</h2><span class="tag">可正 · 可负</span></div><div class="preset-row"><button type="button" class="preset" data-preset="bitter">先苦后甜</button><button type="button" class="preset" data-preset="balanced">平衡推进</button><button type="button" class="preset" data-preset="deadline">DDL 优先</button></div><label class="range-label" for="weight-importance">重要性 <output id="weight-importance-value"></output></label><input class="range" id="weight-importance" name="importance" type="range" min="0" max="100" step="5"><label class="range-label" for="weight-urgency">DDL 紧急程度 <output id="weight-urgency-value"></output></label><input class="range" id="weight-urgency" name="urgency" type="range" min="0" max="100" step="5"><label class="range-label" for="weight-enjoyment">愉悦性 <output id="weight-enjoyment-value"></output></label><input class="range" id="weight-enjoyment" name="enjoyment" type="range" min="-100" max="100" step="5"><div class="range-endpoints"><span>−100 先苦后甜</span><span>＋100 喜欢的优先</span></div><p id="weight-description" class="settings-note"></p><p class="muted small">紧急程度由 DDL 自动计算，并参考整体剩余工作量；阶段目标较低也不会掩盖整体延期风险。</p></section><section class="settings-card"><h2>时间安排（可选）</h2><p class="muted small">这段时间只用于生成任务时间块，不代表你全天都空闲。可以按自己的作息修改。</p><label class="flag-option"><input name="useDailyBudget" type="checkbox">启用每天安排上限</label><div class="form-grid"><label>任务可安排的最早时刻<input name="dayStart" type="time" required></label><label>任务可安排的最晚时刻<input name="dayEnd" type="time" required></label><label>每天任务安排上限<small>分钟，仅开启后使用</small><input name="dailyBudget" type="number" min="15" max="840" step="5" required></label><label>每段专注时间<small>分钟</small><input name="blockMinutes" type="number" min="5" max="180" step="5" required></label><label>段间休息<small>分钟</small><input name="breakMinutes" type="number" min="0" max="60" step="5" required></label><label>课程前后缓冲<small>分钟，用于通勤等</small><input name="courseBuffer" type="number" min="0" max="60" step="5" required></label></div><p class="muted small">用餐或其他固定安排，也可以在课表里添加。</p></section><section class="settings-card"><h2>任务展示</h2><label>默认展示方式<select name="taskView"><option value="table" selected>表格编辑</option><option value="cards">卡片视图</option></select></label><p class="muted small">任务清单中的切换按钮也会同步保存此设置。</p></section><section class="settings-card"><h2>学期设置</h2><div class="form-grid"><label>第一周的周一<input name="semesterStart" type="date" required></label><label>学期总周数<input name="semesterWeeks" type="number" min="1" max="52" required></label></div><p class="muted small">用于计算第几周、单双周以及课程起止周。</p></section><section class="settings-card"><h2>数据与备份</h2><p class="subtitle">任务、课表和最近 14 天的每日记录保存在当前浏览器中，与网页程序分开保存。正常更新页面会继续读取已有数据。跨设备或从本地 HTML 切换到在线地址时，请先导出，再导入。</p><p class="muted small">直接打开本地 HTML 时，请保持文件名、位置和浏览器不变；不同文件地址的存储行为由浏览器决定。更新前建议导出一次完整备份。</p><div class="button-row"><button type="button" class="button secondary" data-action="export-backup">导出完整备份</button><label class="button secondary file-button">导入备份<input id="backup-import" type="file" accept=".json,application/json" hidden></label></div><div class="data-actions"><button type="button" class="text-button" data-action="load-demo">载入演示数据</button><button type="button" class="text-button danger-text" data-action="fresh-start">清空并开始新计划</button></div></section></div><p id="settings-error" class="form-error" role="alert"></p></form></section>
+    <section id="view-settings" class="view" aria-labelledby="settings-title" hidden><div class="page-heading"><div><p class="eyebrow">SETTINGS</p><h1 id="settings-title">参数设置</h1><p class="subtitle">调整排序权重、时间安排和任务展示方式。</p></div><span class="save-indicator">更改后自动保存</span></div><form id="settings-form"><div class="settings-grid"><section class="settings-card"><div class="section-heading"><h2>排序权重</h2><span class="tag">可正 · 可负</span></div><div class="preset-row"><button type="button" class="preset" data-preset="bitter">低愉悦优先</button><button type="button" class="preset" data-preset="balanced">均衡权重</button><button type="button" class="preset" data-preset="deadline">DDL 优先</button></div><label class="range-label" for="weight-importance">重要性 <output id="weight-importance-value"></output></label><input class="range" id="weight-importance" name="importance" type="range" min="0" max="100" step="5"><label class="range-label" for="weight-urgency">DDL 紧急程度 <output id="weight-urgency-value"></output></label><input class="range" id="weight-urgency" name="urgency" type="range" min="0" max="100" step="5"><label class="range-label" for="weight-enjoyment">愉悦性 <output id="weight-enjoyment-value"></output></label><input class="range" id="weight-enjoyment" name="enjoyment" type="range" min="-100" max="100" step="5"><div class="range-endpoints"><span>−100 低愉悦优先</span><span>＋100 高愉悦优先</span></div><p id="weight-description" class="settings-note"></p><p class="muted small">紧急程度由 DDL 自动计算，并参考整体剩余工作量；阶段目标较低也不会掩盖整体延期风险。</p></section><section class="settings-card"><h2>时间安排（可选）</h2><p class="muted small">以下时段用于生成任务时间块；每日安排上限按需启用。</p><label class="flag-option"><input name="useDailyBudget" type="checkbox">启用每天安排上限</label><div class="form-grid"><label>任务可安排的最早时刻<input name="dayStart" type="time" required></label><label>任务可安排的最晚时刻<input name="dayEnd" type="time" required></label><label>每天任务安排上限<small>分钟，仅开启后使用</small><input name="dailyBudget" type="number" min="15" max="840" step="5" required></label><label>每段专注时间<small>分钟</small><input name="blockMinutes" type="number" min="5" max="180" step="5" required></label><label>段间休息<small>分钟</small><input name="breakMinutes" type="number" min="0" max="60" step="5" required></label><label>课程前后缓冲<small>分钟，用于通勤等</small><input name="courseBuffer" type="number" min="0" max="60" step="5" required></label></div><p class="muted small">用餐或其他固定安排，也可以在课表里添加。</p></section><section class="settings-card"><h2>任务展示</h2><label>默认展示方式<select name="taskView"><option value="table" selected>表格编辑</option><option value="cards">卡片视图</option></select></label><p class="muted small">任务清单中的切换按钮也会同步保存此设置。</p></section><section class="settings-card"><h2>学期设置</h2><div class="form-grid"><label>第一周的周一<input name="semesterStart" type="date" required></label><label>学期总周数<input name="semesterWeeks" type="number" min="1" max="52" required></label></div><p class="muted small">用于计算第几周、单双周以及课程起止周。</p></section><section class="settings-card"><h2>数据与备份</h2><p class="subtitle">任务、课表和最近 14 天的每日记录保存在当前浏览器中，与网页程序分开保存。正常更新页面会继续读取已有数据。跨设备或从本地 HTML 切换到在线地址时，请先导出，再导入。</p><p class="muted small">直接打开本地 HTML 时，请保持文件名、位置和浏览器不变；不同文件地址的存储行为由浏览器决定。更新前建议导出一次完整备份。</p><div class="button-row"><button type="button" class="button secondary" data-action="export-backup">导出完整备份</button><label class="button secondary file-button">导入备份<input id="backup-import" type="file" accept=".json,application/json" hidden></label></div><div class="data-actions"><button type="button" class="text-button" data-action="load-demo">载入演示数据</button><button type="button" class="text-button danger-text" data-action="fresh-start">清空并开始新计划</button></div></section></div><p id="settings-error" class="form-error" role="alert"></p></form></section>
     <section id="view-logs" class="view" aria-labelledby="logs-title" hidden>
-      <div class="page-heading"><div><p class="eyebrow">EVERY STEP COUNTS</p><h1 id="logs-title">每天做过的，都记下来。</h1><p class="subtitle">完成或部分推进都算。记录保存在本地，仅保留最近 14 天。</p></div><button class="button primary" data-action="new-log">＋ 补记一条</button></div>
+      <div class="page-heading"><div><p class="eyebrow">LOG</p><h1 id="logs-title">每日记录</h1><p class="subtitle">记录已完成及部分推进的事项；本地仅保留最近 14 天。</p></div><button class="button primary" data-action="new-log">＋ 补记一条</button></div>
       <div class="logs-toolbar"><div class="date-picker"><button class="icon-button" data-action="previous-log-day" aria-label="查看前一天记录">←</button><input id="log-date" type="date" aria-label="查看记录日期"><button class="icon-button" id="next-log-day" data-action="next-log-day" aria-label="查看后一天记录">→</button><button class="text-button" data-action="logs-today">今天</button></div><span id="logs-retention-label" class="muted"></span></div>
       <div id="logs-summary" class="log-summary" aria-live="polite"></div>
       <div id="log-list" class="log-list"></div>
       <p class="panel-footnote">更新任务进度时自动记录，也可手动补记。清理在打开页面和页面运行时检查；关闭期间在下次打开时补做。修改或删除历史记录不会回退任务进度。</p>
     </section>
-    <footer class="page-footer"><span>有序 · 给重要的事留出时间</span><span>每一步进度，都算数。</span></footer>
+    <footer class="page-footer"><span>有序 · 任务规划器</span><span>数据保存在当前浏览器</span></footer>
   </main>
 
-  <dialog id="task-dialog" class="dialog"><form id="task-form"><div class="dialog-heading"><div><p class="eyebrow">A SMALL STEP FORWARD</p><h2 id="task-dialog-title">添加一件事</h2></div><button class="icon-button" type="button" data-close="task-dialog" aria-label="关闭">×</button></div><input name="id" type="hidden"><label>事项类型<select id="task-kind" name="kind"><option value="task">可推进任务 · 作业、备考等</option><option value="event">固定事件 · 考试、会议等</option></select></label><label>事项名称<input name="title" maxlength="200" required placeholder="例如：完成实习调研报告" autocomplete="off"></label><div id="task-estimate-memory" class="estimate-memory" hidden><span id="task-estimate-memory-text"></span><button type="button" class="text-button" id="task-estimate-use" data-action="use-estimate">采用参考用时</button></div><div class="form-grid"><label>分类<select name="category"><option>课业</option><option>实习</option><option>课余</option><option>生活</option></select></label><label><span id="task-date-label">截止日期 / 时刻</span><small>可留空</small><select id="task-due-precision" name="duePrecision" aria-label="截止时间精度"><option value="date">只确定日期</option><option value="time">精确到时刻</option></select><input name="due" type="date" aria-label="事项日期或时刻"></label></div><div id="task-work-fields" class="form-grid"><label>重要性<select name="importance"><option value="" selected>尚未评价</option><option value="1">1 · 可选</option><option value="2">2 · 有些价值</option><option value="3">3 · 值得投入</option><option value="4">4 · 很重要</option><option value="5">5 · 核心目标</option></select></label><label>愉悦性<select name="enjoyment"><option value="" selected>尚未评价</option><option value="1">1 · 很不想做</option><option value="2">2 · 有点抗拒</option><option value="3">3 · 一般</option><option value="4">4 · 比较喜欢</option><option value="5">5 · 非常喜欢</option></select></label><label>完成 100% 预计用时<small>分钟，可以随后修正</small><input name="totalMinutes" type="number" min="5" max="60000" step="5" placeholder="尚未估计，可留空"></label><div class="estimate-result"><small>本轮预计还需</small><strong id="stage-estimate">待补充参数</strong></div><label>目前已完成<small>%</small><input name="progress" type="number" min="0" max="100" step="0.1" value="0" placeholder="默认 0，可调整"></label><label>本轮想推进到<small>%（累计进度）</small><input name="target" type="number" min="1" max="100" step="0.1" value="100" placeholder="默认 100，可调整"></label></div><section id="task-repeat-fields" class="task-repeat-fields"><label class="flag-option"><input name="repeatEnabled" id="task-repeat-enabled" type="checkbox">按周期批量创建</label><div id="task-repeat-options" class="form-grid" hidden><label>重复频率<select name="repeatFrequency"><option value="daily">每天</option><option value="weekly" selected>每周</option></select></label><label>周期间隔<small>例如 2 表示每 2 周 / 天</small><input name="repeatInterval" type="number" min="1" max="12" step="1" value="1"></label><label>生成次数<small>含本次</small><input name="repeatCount" type="number" min="2" max="52" step="1" value="4"></label><p id="task-repeat-preview" class="muted small">首次 DDL 填写后显示预览</p></div><p class="muted small repeat-help">按指定次数生成独立任务，重复的名称与日期会跳过。</p></section><div id="event-fields" class="form-grid" hidden><label>结束时刻<small>可留空，不推测时长</small><input name="eventEnd" type="datetime-local"></label><label>地点<small>可留空</small><input name="eventLocation" maxlength="200" placeholder="例如：考场待通知"></label><label>参加状态<select name="eventStatus"><option value="pending">待发生 / 待确认</option><option value="attended">已参加</option><option value="missed">未参加</option></select></label><p class="muted small">仅确定日期时只提醒；起止时刻齐全后固定占用该时段。备考请单独建为可推进任务。</p></div><label class="flag-option"><input name="flagged" type="checkbox">🔴 重点标记</label><label><span id="task-next-label">下一步行动</span><small>可选，让开始更容易</small><textarea name="nextAction" rows="2" maxlength="1000" placeholder="例如：先列提纲，再整理第一部分数据"></textarea></label><p id="task-error" class="form-error" role="alert"></p><div class="dialog-footer"><button type="button" class="button secondary" data-close="task-dialog">取消</button><button class="button primary" type="submit">保存任务</button></div></form></dialog>
+  <dialog id="task-dialog" class="dialog"><form id="task-form"><div class="dialog-heading"><div><p class="eyebrow">TASK</p><h2 id="task-dialog-title">添加事项</h2></div><button class="icon-button" type="button" data-close="task-dialog" aria-label="关闭">×</button></div><input name="id" type="hidden"><label>事项类型<select id="task-kind" name="kind"><option value="task">可推进任务 · 作业、备考等</option><option value="event">固定事件 · 考试、会议等</option></select></label><label>事项名称<input name="title" maxlength="200" required placeholder="例如：完成实习调研报告" autocomplete="off"></label><div id="task-estimate-memory" class="estimate-memory" hidden><span id="task-estimate-memory-text"></span><button type="button" class="text-button" id="task-estimate-use" data-action="use-estimate">采用参考用时</button></div><div class="form-grid"><label>分类<select name="category"><option>课业</option><option>实习</option><option>课余</option><option>生活</option></select></label><label><span id="task-date-label">截止日期 / 时刻</span><small>可留空</small><select id="task-due-precision" name="duePrecision" aria-label="截止时间精度"><option value="date">只确定日期</option><option value="time">精确到时刻</option></select><input name="due" type="date" aria-label="事项日期或时刻"></label></div><div id="task-work-fields" class="form-grid"><label>重要性<select name="importance"><option value="" selected>尚未评价</option><option value="1">1 · 可选</option><option value="2">2 · 有些价值</option><option value="3">3 · 值得投入</option><option value="4">4 · 很重要</option><option value="5">5 · 核心目标</option></select></label><label>愉悦性<select name="enjoyment"><option value="" selected>尚未评价</option><option value="1">1 · 很不想做</option><option value="2">2 · 有点抗拒</option><option value="3">3 · 一般</option><option value="4">4 · 比较喜欢</option><option value="5">5 · 非常喜欢</option></select></label><label>完成 100% 预计用时<small>分钟，可以随后修正</small><input name="totalMinutes" type="number" min="5" max="60000" step="5" placeholder="尚未估计，可留空"></label><div class="estimate-result"><small>本轮预计还需</small><strong id="stage-estimate">待补充参数</strong></div><label>目前已完成<small>%</small><input name="progress" type="number" min="0" max="100" step="0.1" value="0" placeholder="默认 0，可调整"></label><label>本轮想推进到<small>%（累计进度）</small><input name="target" type="number" min="1" max="100" step="0.1" value="100" placeholder="默认 100，可调整"></label></div><section id="task-repeat-fields" class="task-repeat-fields"><label class="flag-option"><input name="repeatEnabled" id="task-repeat-enabled" type="checkbox">按周期批量创建</label><div id="task-repeat-options" class="form-grid" hidden><label>重复频率<select name="repeatFrequency"><option value="daily">每天</option><option value="weekly" selected>每周</option></select></label><label>周期间隔<small>例如 2 表示每 2 周 / 天</small><input name="repeatInterval" type="number" min="1" max="12" step="1" value="1"></label><label>生成次数<small>含本次</small><input name="repeatCount" type="number" min="2" max="52" step="1" value="4"></label><p id="task-repeat-preview" class="muted small">首次 DDL 填写后显示预览</p></div><p class="muted small repeat-help">按指定次数生成独立任务，重复的名称与日期会跳过。</p></section><div id="event-fields" class="form-grid" hidden><label>结束时刻<small>可留空，不推测时长</small><input name="eventEnd" type="datetime-local"></label><label>地点<small>可留空</small><input name="eventLocation" maxlength="200" placeholder="例如：考场待通知"></label><label>参加状态<select name="eventStatus"><option value="pending">待发生 / 待确认</option><option value="attended">已参加</option><option value="missed">未参加</option></select></label><p class="muted small">仅确定日期时只提醒；起止时刻齐全后固定占用该时段。备考请单独建为可推进任务。</p></div><label class="flag-option"><input name="flagged" type="checkbox">🔴 重点标记</label><label><span id="task-next-label">下一步行动</span><small>可选</small><textarea name="nextAction" rows="2" maxlength="1000" placeholder="例如：先列提纲，再整理第一部分数据"></textarea></label><p id="task-error" class="form-error" role="alert"></p><div class="dialog-footer"><button type="button" class="button secondary" data-close="task-dialog">取消</button><button class="button primary" type="submit">保存任务</button></div></form></dialog>
 
-  <dialog id="progress-dialog" class="dialog compact-dialog"><form id="progress-form"><div class="dialog-heading"><div><p class="eyebrow">EVERY STEP COUNTS</p><h2>更新进度</h2></div><button class="icon-button" type="button" data-close="progress-dialog" aria-label="关闭">×</button></div><input name="id" type="hidden"><p id="progress-task-name" class="progress-task-name"></p><label class="range-label" for="progress-range">目前完成到 <output id="progress-value">0%</output></label><input id="progress-range" class="range" type="range" min="0" max="100" step="1"><div class="form-grid"><label>精确进度 %<input name="progress" type="number" min="0" max="100" step="0.1"></label><label>本轮目标 %<input name="target" type="number" min="1" max="100" step="0.1"></label></div><label>这次实际投入<small>分钟，可留空</small><input name="minutes" type="number" min="1" max="1440" placeholder="例如 45"></label><div class="form-grid logs-time-fields"><label>实际开始<small>可留空</small><input name="startedAt" type="datetime-local"></label><label>实际结束<small>可留空</small><input name="endedAt" type="datetime-local"></label></div><label>这次做了什么<small>可选，会写入每日记录</small><textarea name="note" rows="2" maxlength="2000" placeholder="例如：做完前 3 题，第 4 题还需要复习"></textarea></label><p class="muted small">推进进度后自动留一条记录。填写起止时刻后会计算实际用时；不填时长也能记录。</p><p id="progress-stage-note" class="settings-note"></p><p id="progress-error" class="form-error" role="alert"></p><div class="dialog-footer"><button type="button" class="button secondary" data-close="progress-dialog">取消</button><button class="button primary" type="submit">更新并重排</button></div></form></dialog>
+  <dialog id="progress-dialog" class="dialog compact-dialog"><form id="progress-form"><div class="dialog-heading"><div><p class="eyebrow">PROGRESS</p><h2>更新进度</h2></div><button class="icon-button" type="button" data-close="progress-dialog" aria-label="关闭">×</button></div><input name="id" type="hidden"><p id="progress-task-name" class="progress-task-name"></p><label class="range-label" for="progress-range">目前完成到 <output id="progress-value">0%</output></label><input id="progress-range" class="range" type="range" min="0" max="100" step="1"><div class="form-grid"><label>精确进度 %<input name="progress" type="number" min="0" max="100" step="0.1"></label><label>本轮目标 %<input name="target" type="number" min="1" max="100" step="0.1"></label></div><label>这次实际投入<small>分钟，可留空</small><input name="minutes" type="number" min="1" max="1440" placeholder="例如 45"></label><div class="form-grid logs-time-fields"><label>实际开始<small>可留空</small><input name="startedAt" type="datetime-local"></label><label>实际结束<small>可留空</small><input name="endedAt" type="datetime-local"></label></div><label>这次做了什么<small>可选，会写入每日记录</small><textarea name="note" rows="2" maxlength="2000" placeholder="例如：做完前 3 题，第 4 题还需要复习"></textarea></label><p class="muted small">推进进度后自动留一条记录。填写起止时刻后会计算实际用时；不填时长也能记录。</p><p id="progress-stage-note" class="settings-note"></p><p id="progress-error" class="form-error" role="alert"></p><div class="dialog-footer"><button type="button" class="button secondary" data-close="progress-dialog">取消</button><button class="button primary" type="submit">更新并重排</button></div></form></dialog>
 
-  <dialog id="course-dialog" class="dialog"><form id="course-form"><div class="dialog-heading"><div><p class="eyebrow">A FIXED PART OF YOUR WEEK</p><h2 id="course-dialog-title">添加固定安排</h2></div><button class="icon-button" type="button" data-close="course-dialog" aria-label="关闭">×</button></div><input name="id" type="hidden"><label>课程 / 安排名称<input name="title" maxlength="200" required placeholder="例如：课程学习 / 每日活动"></label><div class="form-grid"><label>重复日期<select name="day"><option value="1">星期一</option><option value="2">星期二</option><option value="3">星期三</option><option value="4">星期四</option><option value="5">星期五</option><option value="6">星期六</option><option value="0">星期日</option><option value="daily">每天</option></select></label><label>地点<small>可选</small><input name="location" maxlength="200" placeholder="教学楼 / 线上"></label><label>开始时间<input name="start" type="time" value="08:00" required></label><label>结束时间<input name="end" type="time" value="09:40" required></label><label>起始周<input name="startWeek" type="number" min="1" max="52" value="1" required></label><label>结束周<input name="endWeek" type="number" min="1" max="52" value="20" required></label><label>重复规则<select name="weekMode"><option value="all">每周</option><option value="odd">仅单周</option><option value="even">仅双周</option></select></label></div><p id="course-error" class="form-error" role="alert"></p><div class="dialog-footer"><button class="text-button danger-text" type="button" id="delete-course" data-action="delete-course" hidden>删除安排</button><button class="button primary" type="submit">保存安排</button></div></form></dialog>
+  <dialog id="course-dialog" class="dialog"><form id="course-form"><div class="dialog-heading"><div><p class="eyebrow">TIMETABLE</p><h2 id="course-dialog-title">添加固定安排</h2></div><button class="icon-button" type="button" data-close="course-dialog" aria-label="关闭">×</button></div><input name="id" type="hidden"><label>课程 / 安排名称<input name="title" maxlength="200" required placeholder="例如：课程学习 / 每日活动"></label><div class="form-grid"><label>重复日期<select name="day"><option value="1">星期一</option><option value="2">星期二</option><option value="3">星期三</option><option value="4">星期四</option><option value="5">星期五</option><option value="6">星期六</option><option value="0">星期日</option><option value="daily">每天</option></select></label><label>地点<small>可选</small><input name="location" maxlength="200" placeholder="教学楼 / 线上"></label><label>开始时间<input name="start" type="time" value="08:00" required></label><label>结束时间<input name="end" type="time" value="09:40" required></label><label>起始周<input name="startWeek" type="number" min="1" max="52" value="1" required></label><label>结束周<input name="endWeek" type="number" min="1" max="52" value="20" required></label><label>重复规则<select name="weekMode"><option value="all">每周</option><option value="odd">仅单周</option><option value="even">仅双周</option></select></label></div><p id="course-error" class="form-error" role="alert"></p><div class="dialog-footer"><button class="text-button danger-text" type="button" id="delete-course" data-action="delete-course" hidden>删除安排</button><button class="button primary" type="submit">保存安排</button></div></form></dialog>
 
   <dialog id="ai-dialog" class="dialog ai-dialog" aria-labelledby="ai-dialog-title">
     <form id="ai-form">
-      <div class="dialog-heading"><div><p class="eyebrow">PLAN WITH YOUR WORDS</p><h2 id="ai-dialog-title">AI 修改任务</h2></div><button class="icon-button" type="button" data-close="ai-dialog" aria-label="关闭 AI 修改任务">×</button></div>
+      <div class="dialog-heading"><div><p class="eyebrow">AI ASSISTANT</p><h2 id="ai-dialog-title">AI 修改任务</h2></div><button class="icon-button" type="button" data-close="ai-dialog" aria-label="关闭 AI 修改任务">×</button></div>
       <p class="subtitle">写下想改什么，先查看方案，再应用到任务。</p>
       <div class="form-grid"><label>服务商<select name="provider" id="ai-provider"><option value="deepseek" selected>DeepSeek</option><option value="openai">OpenAI</option></select></label><label>模型<small>可以修改</small><input name="model" id="ai-model" type="text" value="deepseek-flash" required autocomplete="off"></label></div>
       <p id="ai-endpoint" class="muted small ai-endpoint">https://api.deepseek.com/chat/completions</p>
@@ -705,12 +711,12 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p>请启用 JavaScript 以使用任务排序和课表排程。</p></noscript>
   <dialog id="log-dialog" class="dialog"><form id="log-form">
-    <div class="dialog-heading"><div><p class="eyebrow">A RECORD OF YOUR DAY</p><h2 id="log-dialog-title">补记一条</h2></div><button class="icon-button" type="button" data-close="log-dialog" aria-label="关闭">×</button></div>
+    <div class="dialog-heading"><div><p class="eyebrow">LOG</p><h2 id="log-dialog-title">补记一条</h2></div><button class="icon-button" type="button" data-close="log-dialog" aria-label="关闭">×</button></div>
     <input name="id" type="hidden">
     <label>关联任务<small>可选</small><select name="taskId" id="log-task-select"><option value="">不关联任务</option></select></label>
     <label>做了什么<input name="taskTitle" maxlength="200" required placeholder="例如：课程作业，完成前半部分"></label>
     <div class="form-grid"><label>记录日期<input name="date" type="date" required></label><label>完成状态<select name="status"><option value="partial">部分推进</option><option value="completed">全部完成</option><option value="activity">其他活动</option></select></label><label>实际开始<small>可留空</small><input name="startedAt" type="datetime-local"></label><label>实际结束<small>可留空</small><input name="endedAt" type="datetime-local"></label><label>实际用时<small>分钟，可留空</small><input name="minutes" type="number" min="1" max="1440" placeholder="起止时刻齐全时自动计算"></label><span class="muted small">不知道具体时刻时，可以只填用时；都不确定也能保存。</span><label>从多少进度<small>%，可留空</small><input name="fromProgress" type="number" min="0" max="100" step="0.1"></label><label>推进到多少<small>%，可留空</small><input name="toProgress" type="number" min="0" max="100" step="0.1"></label></div>
-    <label>具体做了什么 / 备注<textarea name="note" rows="3" maxlength="2000" placeholder="记录成果、卡住的地方，或下一步"></textarea></label>
+    <label>具体做了什么 / 备注<textarea name="note" rows="3" maxlength="2000" placeholder="记录完成内容、未解决问题或后续安排"></textarea></label>
     <p class="muted small">补记和编辑用于校正历史，任务当前进度请在任务页更新。只可补记最近 14 天。</p><p id="log-error" class="form-error" role="alert"></p>
     <div class="dialog-footer"><button type="button" class="button secondary" data-close="log-dialog">取消</button><button type="submit" class="button primary">保存记录</button></div>
   </form></dialog>
@@ -1092,7 +1098,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
         if (due && chosen.priority.risk !== 'overdue' && localDate(due) === date) dueMinute = due.getHours() * 60 + due.getMinutes();
         var length = Math.floor(Math.min(s.blockMinutes, budget, left[chosen.id], slot.end - workStart, dueMinute - workStart));
         if (length <= 0) break;
-        if (workStart > cursor) blocks.push({ id: 'break-' + (++sequence), kind: 'break', title: '休息一下', start: cursor, end: workStart });
+        if (workStart > cursor) blocks.push({ id: 'break-' + (++sequence), kind: 'break', title: '段间休息', start: cursor, end: workStart });
         blocks.push({
           id: 'task-' + chosen.id + '-' + (++sequence), kind: 'task', taskId: chosen.id,
           title: chosen.title, start: workStart, end: workStart + length,
@@ -2151,10 +2157,10 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     $('free-value').textContent = P.formatMinutes(spentMinutes);
     const nearestDue = state.tasks.filter(task => !D.isEvent(task) && !D.taskMetrics(task).done && task.due).sort((a, b) => a.due.localeCompare(b.due))[0];
     $('planned-value').textContent = nearestDue ? nearestDue.due.slice(5, 10).replace('-', '/') : '暂无';
-    $('budget-label').textContent = nearestDue ? '按你填写的截止日期提醒' : '填写 DDL 后显示';
+    $('budget-label').textContent = nearestDue ? '按已填写的截止日期提醒' : '填写 DDL 后显示';
     $('active-value').textContent = plan.ranked.length + ' 件';
     const reached = state.tasks.filter(task => !D.isEvent(task) && D.taskMetrics(task).stageReached && !D.taskMetrics(task).done);
-    $('stages-label').textContent = reached.length ? reached.length + ' 件本轮已达标' : '阶段目标可以随时调整';
+    $('stages-label').textContent = reached.length ? reached.length + ' 件本轮已达标' : '阶段目标可编辑';
     $('ranking-update').textContent = today ? '更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '预览 ' + selectedDate.slice(5).replace('-', '/');
     $('ranking-title').textContent = today ? '任务实时榜' : '当天任务榜 · 预览';
     $('schedule-title').textContent = today ? '今天的时间安排' : selectedDate.slice(5).replace('-', '/') + ' 的时间安排';
@@ -2164,18 +2170,18 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     if (first) {
       const slot = plan.blocks.find(b => b.kind === 'task' && b.taskId === first.id);
       const workloadKnown = first.remaining != null;
-      $('next-recommendation').innerHTML = '<div class="recommendation"><div class="recommendation-kicker"><span class="live-dot"></span>' + (today ? '当前优先推荐' : '当天优先推荐') + riskMarkup(first.priority) + (first.flagged ? '<span class="risk-tag overdue">重点标记</span>' : '') + '</div><h3 class="recommendation-title">' + esc(first.title) + '</h3><p class="recommendation-action">' + esc(first.nextAction || (workloadKnown ? '先推进一小段，再根据实际进展调整。' : '先确认任务要求与剩余工作量，补充估时和阶段目标后即可安排时间。')) + '</p><div class="recommendation-meta"><span>' + stageText(first) + ' · ' + (workloadKnown ? '本轮约 ' + durationText(first.remaining) : '预计时长待补充') + '</span><span>' + (slot ? '建议 ' + time(slot.start) + ' 开始' : workloadKnown ? '当天暂无可安排空档' : '暂按 DDL 排序') + '</span></div><button class="button primary" data-action="' + (workloadKnown ? 'progress' : 'edit-task') + '" data-id="' + esc(first.id) + '">' + (workloadKnown ? '更新进度 ↗' : '补充任务参数 ↗') + '</button></div>';
+      $('next-recommendation').innerHTML = '<div class="recommendation"><div class="recommendation-kicker"><span class="live-dot"></span>' + (today ? '当前优先任务' : '当天优先任务') + riskMarkup(first.priority) + (first.flagged ? '<span class="risk-tag overdue">重点标记</span>' : '') + '</div><h3 class="recommendation-title">' + esc(first.title) + '</h3><p class="recommendation-action">' + esc(first.nextAction || (workloadKnown ? '按建议时间块执行，并记录实际进度。' : '补充预计用时和阶段目标后生成时间安排。')) + '</p><div class="recommendation-meta"><span>' + stageText(first) + ' · ' + (workloadKnown ? '本轮约 ' + durationText(first.remaining) : '预计时长待补充') + '</span><span>' + (slot ? '建议 ' + time(slot.start) + ' 开始' : workloadKnown ? '当天暂无可安排空档' : '暂按 DDL 排序') + '</span></div><button class="button primary" data-action="' + (workloadKnown ? 'progress' : 'edit-task') + '" data-id="' + esc(first.id) + '">' + (workloadKnown ? '更新进度 ↗' : '补充任务参数 ↗') + '</button></div>';
     } else $('next-recommendation').innerHTML = '';
     $('ranking-list').innerHTML = plan.ranked.length ? plan.ranked.map((task, index) => {
       const priority = task.priority, allocated = plan.allocations[task.id] || 0;
       const missing = missingFields(task), workloadKnown = task.remaining != null;
       return '<article class="rank-card"><div class="rank-top"><span class="rank-number">' + String(index + 1).padStart(2, '0') + '</span><div class="task-main"><div class="task-title">' + esc(task.title) + '</div><div class="task-meta"><span class="task-category">' + esc(task.category) + '</span><span>' + esc(dueText(task)) + '</span>' + riskMarkup(priority) + (task.flagged ? '<span class="risk-tag overdue">重点标记</span>' : '') + '</div></div><span class="score-pill">' + (priority.provisional ? '≈' : '') + Number(priority.score).toFixed(1) + '<small>' + (priority.provisional ? '暂定优先分' : '优先分') + '</small></span></div>' + progressMarkup(task) + '<div class="rank-bottom"><div><p class="rank-reason">' + esc(priority.reason) + '</p><span class="muted small">自动紧急 ' + Number(priority.urgency).toFixed(1) + '/5 · ' + (workloadKnown ? '本轮约 ' + durationText(task.remaining) + ' · 当天安排 ' + P.formatMinutes(allocated) : '待补充：' + esc(missing.join('、'))) + '</span></div><div class="rank-actions"><button class="text-button" data-action="' + (workloadKnown ? 'progress' : 'edit-task') + '" data-id="' + esc(task.id) + '">' + (workloadKnown ? '更新进度' : '补充参数') + '</button><button class="icon-button" data-action="edit-task" data-id="' + esc(task.id) + '" aria-label="编辑' + esc(task.title) + '">⋯</button></div></div></article>';
-    }).join('') : emptyMarkup(state.tasks.some(task => !D.isEvent(task)) ? '这一轮，可以松一口气。' : '现在没有可推进任务。', state.tasks.some(task => !D.isEvent(task)) ? '当前没有待推进的阶段目标。可以提高目标，继续下一步。' : '固定事件按发生时间提醒。需要提前准备时，可以另建备考或准备任务。', 'new-task', '添加可推进任务');
+    }).join('') : emptyMarkup(state.tasks.some(task => !D.isEvent(task)) ? '本轮无待推进任务。' : '没有可推进任务。', state.tasks.some(task => !D.isEvent(task)) ? '当前阶段目标已完成。提高目标可重新加入排序。' : '固定事件按发生时间提醒。备考或准备任务可单独添加。', 'new-task', '添加可推进任务');
     $('stage-reached-list').innerHTML = reached.length ? '<div class="stage-heading">本轮已达标 · ' + reached.length + '</div>' + reached.map(task => '<div class="stage-card"><div><strong>' + esc(task.title) + '</strong><span class="muted small">已到 ' + percent(task.progress) + ' · 整体尚未完成</span></div><button class="text-button" data-action="progress" data-id="' + esc(task.id) + '">设置下一目标 ↗</button></div>').join('') : '';
     const unknownCount = plan.ranked.filter(task => task.remaining == null).length;
     const dateOnlyCount = plan.ranked.filter(task => task.due && task.due.length === 10).length;
     $('plan-warnings').innerHTML = (unknownCount ? '<div class="warning">' + unknownCount + ' 件任务尚未填写估时、进度或本轮目标，已参与 DDL 排名，暂未安排时间块。</div>' : '') + (dateOnlyCount ? '<div class="warning">仅日期的 DDL 暂按当天结束估算。具体提交或考试时刻尚待确认，可在编辑任务中补充。</div>' : '') + plan.warnings.map(w => '<div class="warning">' + esc(w) + '</div>').join('');
-    $('schedule-list').innerHTML = plan.blocks.length ? plan.blocks.map(block => '<div class="schedule-block ' + block.kind + '"><div class="schedule-time">' + time(block.start) + '<span>' + time(block.end) + '</span></div><div class="schedule-content"><div class="schedule-title">' + esc(block.title) + '</div><div class="schedule-meta">' + (block.kind === 'course' || block.kind === 'event' ? (block.kind === 'event' ? '固定事件' : '固定安排') + (block.location ? ' · ' + esc(block.location) : '') : block.kind === 'break' ? '休息一下，再继续' : P.formatMinutes(block.end - block.start) + (block.nextAction ? ' · ' + esc(block.nextAction) : '')) + '</div>' + (block.kind === 'task' ? '<button class="text-button schedule-action" data-action="progress" data-id="' + esc(block.taskId) + '" data-minutes="' + (block.end - block.start) + '">记录这一段 ↗</button>' : '') + '</div></div>').join('') : emptyMarkup('暂时没有时间块', '添加任务和课表，或换一天查看安排。');
+    $('schedule-list').innerHTML = plan.blocks.length ? plan.blocks.map(block => '<div class="schedule-block ' + block.kind + '"><div class="schedule-time">' + time(block.start) + '<span>' + time(block.end) + '</span></div><div class="schedule-content"><div class="schedule-title">' + esc(block.title) + '</div><div class="schedule-meta">' + (block.kind === 'course' || block.kind === 'event' ? (block.kind === 'event' ? '固定事件' : '固定安排') + (block.location ? ' · ' + esc(block.location) : '') : block.kind === 'break' ? '段间休息' : P.formatMinutes(block.end - block.start) + (block.nextAction ? ' · ' + esc(block.nextAction) : '')) + '</div>' + (block.kind === 'task' ? '<button class="text-button schedule-action" data-action="progress" data-id="' + esc(block.taskId) + '" data-minutes="' + (block.end - block.start) + '">记录这一段 ↗</button>' : '') + '</div></div>').join('') : emptyMarkup('暂时没有时间块', '添加任务和课表，或换一天查看安排。');
     renderEvents();
   }
   function filteredTasks() {
@@ -2192,8 +2198,8 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     $('task-list').innerHTML = tasks.length ? tasks.map(task => {
       const m = D.taskMetrics(task);
       if (D.isEvent(task)) return '<article class="task-card event-card"><div class="task-card-top"><span class="task-category">固定事件 · ' + esc(task.category) + '</span><span class="tag">' + eventStateText(task) + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="event-meta">' + esc(eventTimeText(task)) + (task.eventLocation ? ' · ' + esc(task.eventLocation) : '') + '</p>' + (task.nextAction ? '<p class="task-next">' + esc(task.nextAction) + '</p>' : '') + '<p class="muted small">按固定时间参加；备考或准备工作可另外创建任务。</p><div class="task-actions">' + eventActions(task) + '<button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
-      return '<article class="task-card"><div class="task-card-top"><span class="task-category">' + esc(task.category) + '</span><span class="tag">' + (m.done ? '全部完成' : m.stageReached ? '本轮已达标' : m.remaining == null ? '待补充参数' : '正在推进') + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="task-meta">' + esc(dueText(task)) + '</p>' + progressMarkup(task) + '<p class="task-next">' + esc(task.nextAction || '下一步由你决定。') + '</p><div class="muted small">整体预计 ' + durationText(task.totalMinutes) + ' · 本轮 ' + durationText(m.remaining) + (task.sourceGroup ? ' · ' + esc(task.sourceGroup) : '') + '</div><div class="task-actions"><button class="button secondary" data-action="' + (m.remaining == null ? 'edit-task' : 'progress') + '" data-id="' + esc(task.id) + '">' + (m.remaining == null ? '补充参数' : m.stageReached && !m.done ? '设置下一目标' : '更新进度') + '</button><button class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
-    }).join('') : emptyMarkup('这里暂时没有任务', '可以切换筛选，或添加一件准备推进的事。', 'new-task', '添加任务');
+      return '<article class="task-card"><div class="task-card-top"><span class="task-category">' + esc(task.category) + '</span><span class="tag">' + (m.done ? '全部完成' : m.stageReached ? '本轮已达标' : m.remaining == null ? '待补充参数' : '进行中') + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="task-meta">' + esc(dueText(task)) + '</p>' + progressMarkup(task) + '<p class="task-next">' + esc(task.nextAction || '未设置下一步行动。') + '</p><div class="muted small">整体预计 ' + durationText(task.totalMinutes) + ' · 本轮 ' + durationText(m.remaining) + (task.sourceGroup ? ' · ' + esc(task.sourceGroup) : '') + '</div><div class="task-actions"><button class="button secondary" data-action="' + (m.remaining == null ? 'edit-task' : 'progress') + '" data-id="' + esc(task.id) + '">' + (m.remaining == null ? '补充参数' : m.stageReached && !m.done ? '设置下一目标' : '更新进度') + '</button><button class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
+    }).join('') : emptyMarkup('当前筛选无任务', '更换筛选条件或添加任务。', 'new-task', '添加任务');
     if (!options || options.taskTable !== false) renderTaskTable(!!(options && options.forceTable));
   }
   function setTaskListView(view) {
@@ -2334,7 +2340,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       const interval = log.startedAt && log.endedAt ? log.startedAt.slice(11) + '—' + (log.endedAt.slice(0, 10) === log.date ? '' : log.endedAt.slice(5, 10).replace('-', '/') + ' ') + log.endedAt.slice(11) : '工作时刻未填写';
       const progress = log.fromProgress != null && log.toProgress != null ? percent(log.fromProgress) + ' → ' + percent(log.toProgress) : log.toProgress != null ? '完成到 ' + percent(log.toProgress) : '';
       return '<article class="log-card"><div class="log-card-heading"><div><h3>' + esc(log.taskTitle) + '</h3><span class="log-clock">' + esc(interval) + ' · ' + (log.minutes == null ? '用时未填写' : P.formatMinutes(log.minutes)) + '</span></div><span class="tag">' + ({ completed: '全部完成', partial: '部分推进', activity: '活动记录' }[log.status]) + '</span></div>' + (progress ? '<span class="log-progress">' + progress + '</span>' : '') + (log.note ? '<p class="log-content">' + esc(log.note) + '</p>' : '') + '<div class="log-card-actions"><span class="muted small">记录于 ' + esc(new Date(log.at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })) + '</span><button class="text-button" data-action="edit-log" data-id="' + esc(log.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-log" data-id="' + esc(log.id) + '">删除</button></div></article>';
-    }).join('') : emptyMarkup('这一天，还没有记录。', '更新任务进度会自动记录，也可以补记完成或推进过的事情。', 'new-log', '补记一条');
+    }).join('') : emptyMarkup('当天无记录。', '更新任务进度会自动记录，也可手动补记。', 'new-log', '补记记录');
   }
   function runLogRetention() {
     if (storageLocked) return false;
@@ -2366,7 +2372,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   }
   function openLog(id) {
     const log = state.logs.find(item => item.id === id), f = $('log-form'); f.reset(); $('log-error').textContent = '';
-    $('log-dialog-title').textContent = log ? '编辑记录' : '补记一条';
+    $('log-dialog-title').textContent = log ? '编辑记录' : '补记记录';
     const missingTask = log && log.taskId && !state.tasks.some(task => task.id === log.taskId);
     f.elements.taskId.innerHTML = '<option value="">不关联任务</option>' + (missingTask ? '<option value="' + esc(log.taskId) + '">原任务已删除 · ' + esc(log.taskTitle) + '</option>' : '') + state.tasks.map(task => '<option value="' + esc(task.id) + '">' + esc(task.title) + '</option>').join('');
     f.elements.id.value = log ? log.id : ''; f.elements.date.value = log ? log.date : logDate;
@@ -2377,7 +2383,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   function updateWeightLabels() {
     ['importance', 'urgency', 'enjoyment'].forEach(key => { const n = Number($('weight-' + key).value); $('weight-' + key + '-value').textContent = n > 0 ? '+' + n : String(n); });
     const n = Number($('weight-enjoyment').value);
-    $('weight-description').textContent = n < 0 ? '先苦后甜：同等条件下，愉悦评分越低的任务越靠前。' : n > 0 ? '喜欢的优先：愉悦评分越高的任务获得更多分数。' : '愉悦性不参与本次排序。';
+    $('weight-description').textContent = n < 0 ? '低愉悦优先：同等条件下，愉悦评分越低的任务越靠前。' : n > 0 ? '高愉悦优先：愉悦评分越高的任务获得更多分数。' : '愉悦性不参与本次排序。';
   }
   function render(options) {
     $('demo-banner').hidden = storageLocked || !state.demo;
@@ -2387,7 +2393,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   function formValues(form) { return Object.fromEntries(new FormData(form)); }
   function openTask(id) {
     const task = state.tasks.find(t => t.id === id), f = $('task-form'); f.reset(); $('task-error').textContent = '';
-    $('task-dialog-title').textContent = task ? '编辑这件事' : '添加一件事';
+    $('task-dialog-title').textContent = task ? '编辑事项' : '添加事项';
     f.elements.id.value = task ? task.id : '';
     f.elements.kind.value = task && D.isEvent(task) ? 'event' : 'task';
     f.elements.duePrecision.value = task && task.due.length > 10 ? 'time' : 'date';
@@ -2528,7 +2534,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     const f = $('progress-form'); if (fromRange) f.elements.progress.value = $('progress-range').value;
     const progress = optionalNumber(f.elements.progress.value) ?? 0, target = optionalNumber(f.elements.target.value) ?? 100;
     $('progress-range').value = progress == null ? 0 : progress; $('progress-value').textContent = progress == null ? '待填写' : percent(progress);
-    $('progress-stage-note').textContent = progress == null || target == null ? '可先记录进度；设置本轮目标并补充估时后，便能安排具体时间。' : progress >= 100 ? '已全部完成。保存后从待办榜移出。' : progress >= target ? '本轮已达标。提高目标后，会继续参与排序。' : '本轮还需推进 ' + percent(Math.round((target - progress) * 10) / 10) + '。';
+    $('progress-stage-note').textContent = progress == null || target == null ? '设置阶段目标和预计用时后生成时间安排。' : progress >= 100 ? '已全部完成。保存后从待办榜移出。' : progress >= target ? '本轮已达标。提高目标可重新加入排序。' : '本轮还需推进 ' + percent(Math.round((target - progress) * 10) / 10) + '。';
   }
   function openCourse(id) {
     const course = state.courses.find(c => c.id === id), f = $('course-form'); f.reset(); $('course-error').textContent = '';
@@ -2592,7 +2598,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       case 'previous-day': selectedDate = P.addDays(selectedDate, -1); renderLive(); break;
       case 'next-day': selectedDate = P.addDays(selectedDate, 1); renderLive(); break;
       case 'today': selectedDate = P.localDate(); renderLive(); break;
-      case 'fresh-start': ask('开始自己的计划？', '将清空当前浏览器中的任务、课表和投入记录。需要保留时，请先在参数偏好中导出备份。', '清空并开始', () => { const error = commit(rememberImportHistory(D.emptyState(P.localDate())), { replaceProtectedData: true }); if (error) { notify(error); return; } go('tasks'); notify('已准备好，添加你的第一件事吧。'); }); break;
+      case 'fresh-start': ask('清空当前计划？', '将清空当前浏览器中的任务、课表和投入记录。需要保留时，请先在参数偏好中导出备份。', '清空计划', () => { const error = commit(rememberImportHistory(D.emptyState(P.localDate())), { replaceProtectedData: true }); if (error) { notify(error); return; } go('tasks'); notify('当前计划已清空。'); }); break;
       case 'load-demo': ask('载入演示数据？', '当前数据会被替换。需要保留时，请先导出备份。', '载入演示', () => {
         const demo = D.applyTaskProgressDefaults(D.createDemo(P.localDate()));
         if (!demo.ok) { notify(demo.errors.join(' ')); return; }
@@ -2659,7 +2665,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     if (!entry.ok) { $('progress-error').textContent = entry.errors.join(' '); return; }
     if (entry.value) next.logs.push(entry.value);
     const error = commit(next); $('progress-error').textContent = error;
-    if (!error) { const metrics = D.taskMetrics(task); $('progress-dialog').close(); notify(metrics.done ? '这件事完成了，给自己一点肯定。' : metrics.stageReached ? '本轮已达标！随时可以设置下一目标。' : '进度已更新，排行榜已重排。'); }
+    if (!error) { const metrics = D.taskMetrics(task); $('progress-dialog').close(); notify(metrics.done ? '任务已完成。' : metrics.stageReached ? '本轮目标已达成。' : '进度已更新，排行榜已重排。'); }
   });
   $('course-form').addEventListener('submit', event => {
     event.preventDefault(); const f = event.currentTarget; if (!f.reportValidity()) return;

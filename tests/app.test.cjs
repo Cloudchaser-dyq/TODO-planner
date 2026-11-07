@@ -304,7 +304,7 @@ test('negative enjoyment preset saves and weight control updates ranking immedia
   const app = boot();
   app.clickData('preset', 'bitter');
   assert.equal(app.saved().settings.weights.enjoyment, -20);
-  assert.match(app.get('weight-description').textContent, /先苦后甜/);
+  assert.match(app.get('weight-description').textContent, /低愉悦优先/);
   const enjoyment = app.get('weight-enjoyment'); enjoyment.value = -40;
   app.get('settings-form').dispatch('input', {target: enjoyment});
   assert.equal(app.saved().settings.weights.enjoyment, -40);

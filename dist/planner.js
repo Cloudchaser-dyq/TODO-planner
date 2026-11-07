@@ -375,7 +375,7 @@
         if (due && chosen.priority.risk !== 'overdue' && localDate(due) === date) dueMinute = due.getHours() * 60 + due.getMinutes();
         var length = Math.floor(Math.min(s.blockMinutes, budget, left[chosen.id], slot.end - workStart, dueMinute - workStart));
         if (length <= 0) break;
-        if (workStart > cursor) blocks.push({ id: 'break-' + (++sequence), kind: 'break', title: '休息一下', start: cursor, end: workStart });
+        if (workStart > cursor) blocks.push({ id: 'break-' + (++sequence), kind: 'break', title: '段间休息', start: cursor, end: workStart });
         blocks.push({
           id: 'task-' + chosen.id + '-' + (++sequence), kind: 'task', taskId: chosen.id,
           title: chosen.title, start: workStart, end: workStart + length,
