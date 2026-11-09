@@ -12,6 +12,7 @@
   <script defer src="data.js"></script>
   <script defer src="imports.js"></script>
   <script defer src="ai.js"></script>
+  <script defer src="pku.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -41,7 +42,7 @@
 
     <section id="view-tasks" class="view" aria-labelledby="tasks-title" hidden>
       <div class="page-heading"><div><p class="eyebrow">TASKS</p><h1 id="tasks-title">任务清单</h1><p class="subtitle">集中编辑截止日期、估时、进度和目标；离开输入框自动保存。</p></div><div class="button-row"><button type="button" class="button secondary" data-action="open-ai">AI 修改任务</button><label class="button secondary file-button">批量追加任务<input id="task-batch-import" type="file" accept=".json,application/json" hidden></label><select id="task-filter" class="select" aria-label="筛选任务"><option value="active">待完成</option><option value="reached">本轮已达标</option><option value="done">已完成 / 已结束</option><option value="events">固定事件</option><option value="all">全部任务</option></select></div></div>
-      <div class="button-row task-view-switch" role="group" aria-label="任务查看方式"><button id="task-table-toggle" class="button secondary" type="button" data-action="task-table-view" aria-pressed="true" aria-controls="task-table-panel">表格编辑</button><button id="task-cards-toggle" class="button secondary" type="button" data-action="task-cards-view" aria-pressed="false" aria-controls="task-list">卡片视图</button></div>
+      <div class="button-row task-view-switch" role="group" aria-label="任务查看方式"><button id="task-table-toggle" class="button secondary" type="button" data-action="task-table-view" aria-pressed="true" aria-controls="task-table-panel">表格编辑</button><button id="task-cards-toggle" class="button secondary" type="button" data-action="task-cards-view" aria-pressed="false" aria-controls="task-list">卡片视图</button><button class="button secondary" type="button" data-action="open-pku">教学网同步</button></div>
       <div id="task-table-panel" class="task-table-panel">
         <p id="task-table-help" class="task-table-help">直接填预计用时、进度和目标，离开输入框自动保存。Enter 同列下一行，Tab 下一格。时刻可留空。</p>
         <p id="task-table-status" class="muted small task-table-status" role="status" aria-live="polite"></p>
@@ -87,6 +88,26 @@
       <div class="dialog-footer ai-request-actions"><button type="button" class="text-button" data-action="clear-ai-key">清除密钥</button><button type="button" class="button secondary" data-action="cancel-ai" id="ai-cancel-request" hidden>取消生成</button><button type="submit" class="button primary" id="ai-generate">生成修改方案</button></div>
     </form>
     <section id="ai-preview" class="ai-preview" hidden aria-labelledby="ai-preview-title"><h3 id="ai-preview-title">待应用的修改</h3><p id="ai-summary" class="ai-summary"></p><div id="ai-change-list" class="ai-change-list"></div><div class="ai-preview-actions"><button id="ai-apply" class="button primary" data-action="apply-ai" type="button" disabled>应用到任务</button></div></section>
+  </dialog>
+  <dialog id="pku-dialog" class="dialog pku-dialog" aria-labelledby="pku-dialog-title">
+    <form id="pku-form" autocomplete="off">
+      <div class="dialog-heading"><div><p class="eyebrow">PKU · LOCAL SYNC</p><h2 id="pku-dialog-title">北京大学教学网同步</h2></div><button class="icon-button" type="button" data-close="pku-dialog" aria-label="关闭教学网同步">×</button></div>
+      <p class="subtitle">读取最近 30 天至未来 180 天的作业 DDL，核对后合并到当前浏览器的任务。</p>
+      <div class="pku-setup"><p>先双击程序目录里的 <strong>启动教学网同步.cmd</strong>，保持连接器窗口开启，再填写窗口中的配对码。</p><p class="muted small">本机连接器：127.0.0.1:4174 · 也可运行 npm run pku</p></div>
+      <label>连接器配对码<small>仅本次页面使用</small><input id="pku-pairing" name="pairing" type="password" autocomplete="off" spellcheck="false" maxlength="128" required></label>
+      <div class="form-grid"><label>校园卡账号<small>已记住登录时可留空</small><input id="pku-username" name="username" type="text" autocomplete="off" spellcheck="false" maxlength="100"></label><label>密码<input id="pku-password" name="password" type="password" autocomplete="off" maxlength="1000"></label></div>
+      <label class="flag-option"><input id="pku-remember" name="remember" type="checkbox">在这台电脑上加密记住登录</label>
+      <p class="muted small">登录信息由本机连接器交给北大统一认证；记住登录使用 Windows 当前用户加密，保存在本机应用数据目录。任务备份与 AI 指令仅包含任务资料。</p>
+      <section id="pku-verification" class="pku-verification" hidden aria-label="统一认证二次验证">
+        <p id="pku-verification-message" class="muted small">请完成北大统一认证要求的验证，再次点击“读取 DDL”。</p>
+        <div id="pku-captcha-group" hidden><img id="pku-captcha-image" alt="北大统一认证图形验证码" hidden><label>图形验证码<input id="pku-captcha" name="captcha" type="text" autocomplete="off" maxlength="20"></label></div>
+        <div id="pku-sms-group" hidden><label>短信验证码<input id="pku-sms-code" name="sms" type="text" inputmode="numeric" autocomplete="off" maxlength="20"></label><button id="pku-send-sms" class="button secondary" type="button" data-action="pku-sms">发送验证码</button></div>
+        <div id="pku-otp-group" hidden><label>手机令牌动态码<input id="pku-otp-code" name="otp" type="text" inputmode="numeric" autocomplete="off" maxlength="20"></label></div>
+      </section>
+      <p id="pku-status" class="ai-status" role="status" aria-live="polite"></p><p id="pku-error" class="form-error" role="alert"></p>
+      <div class="dialog-footer pku-request-actions"><button id="pku-forget" type="button" class="text-button danger-text" data-action="pku-forget">清除本机登录</button><button id="pku-check" type="button" class="button secondary" data-action="pku-check">检查连接</button><button id="pku-cancel" type="button" class="button secondary" data-action="pku-cancel" hidden>取消读取</button><button id="pku-read" type="submit" class="button primary">读取 DDL</button></div>
+    </form>
+    <section id="pku-preview" class="pku-preview" hidden aria-labelledby="pku-preview-title"><h3 id="pku-preview-title">待同步事项</h3><p id="pku-summary" class="muted small"></p><p id="pku-warnings" class="muted small"></p><p class="muted small">时间按北京时间显示；同名任务可选择关联。更新 DDL 会保留你的进度、目标和估时。</p><div id="pku-item-list" class="pku-item-list"></div><div class="ai-preview-actions"><button id="pku-apply" class="button primary" type="button" data-action="pku-apply" disabled>确认合并到任务</button></div></section>
   </dialog>
   <dialog id="confirm-dialog" class="dialog compact-dialog"><div class="dialog-heading"><h2 id="confirm-title">确认操作</h2><button class="icon-button" type="button" data-close="confirm-dialog" aria-label="关闭">×</button></div><p id="confirm-message" class="subtitle"></p><div class="dialog-footer"><button class="button secondary" data-close="confirm-dialog">取消</button><button class="button primary" id="confirm-accept">确认</button></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

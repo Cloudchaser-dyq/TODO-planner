@@ -10,3 +10,9 @@ local-data/
 有序-完整备份-*.json
 有序-原始数据恢复-*.json
 有序-个人*.json
+# All runtime credentials live outside this checkout. Also exclude accidental copies.
+credentials.bin
+.credentials-*.tmp
+*.dpapi
+pku-session*.json
+pku-credentials*.json

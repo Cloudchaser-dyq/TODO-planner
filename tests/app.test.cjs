@@ -146,11 +146,11 @@ function boot(options = {}) {
   if (standalone) {
     assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+rel="stylesheet"/i);
     const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
-    assert.equal(scripts.length, 5);
+    assert.equal(scripts.length, 6);
     scripts.forEach((script, index) => vm.runInContext(script[1], context, { filename: 'standalone-' + index + '.js' }));
   } else {
     const files = ['planner.js', 'data.js']; if (options.bundleImports) files.push('imports.js');
-    files.push('ai.js');
+    files.push('ai.js', 'pku.js');
     for (const file of files) vm.runInContext(fs.readFileSync(path.join(dist, file), 'utf8'), context, { filename: file });
     if (options.importBatches) vm.runInContext('globalThis.PlannerImports = JSON.parse(' + JSON.stringify(JSON.stringify({batches: options.importBatches})) + ')', context);
     vm.runInContext(fs.readFileSync(path.join(dist, 'app.js'), 'utf8'), context, { filename: 'app.js' });
@@ -1534,4 +1534,142 @@ test('weekly timetable aligns a daily lunch in one horizontal start-time row and
   assert.deepEqual(saved.tasks, seed.tasks);
   assert.deepEqual(saved.logs, seed.logs);
   assert.deepEqual(saved.settings, seed.settings);
+});
+
+function pkuItem(extra = {}) { return { sourceId: 'a'.repeat(64), title: '同步测试作业', course: '示例课程', due: '2026-11-12T23:59', sourceUrl: 'https://course.pku.edu.cn/webapps/calendar/viewMyCalendar', ...extra }; }
+function pkuResponse(value, status = 200) { return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(value) }; }
+function openPKUForm(app) {
+  app.clickData('action', 'open-pku'); assert.equal(app.get('pku-dialog').open, true);
+  return app.fill('pku-form', { pairing: 'p'.repeat(64), username: 'private-test-account', password: 'private-test-password', remember: true });
+}
+
+test('PKU preview explicitly links same-name tasks, updates DDL and keeps credentials outside browser task storage', async () => {
+  let remote = pkuItem(); const requests = [];
+  const app = boot({ fetch: async (url, options) => { requests.push({ url, options }); return pkuResponse({ items: [remote], warnings: [] }); } });
+  const existing = addTask(app, { title: '同步测试作业', due: '2026-11-10', progress: 30, target: 70, totalMinutes: 120 });
+  const before = app.raw(); openPKUForm(app); await app.submit('pku-form').settled;
+  assert.equal(app.get('pku-error').textContent, ''); assert.equal(app.raw(), before, 'reading only shows a preview');
+  assert.equal(app.get('pku-preview').hidden, false); assert.equal(app.get('pku-select-0').checked, false);
+  assert.equal(app.get('pku-password').value, ''); assert.equal(app.get('pku-username').value, '');
+  const select = app.get('pku-target-0'); select.value = existing.id; select.dispatch('change');
+  assert.equal(app.get('pku-select-0').checked, true); app.get('pku-apply').click();
+  assert.equal(app.get('pku-error').textContent, '');
+  const first = app.saved(); assert.equal(first.tasks.length, 1);
+  assert.deepEqual([first.tasks[0].id, first.tasks[0].due, first.tasks[0].progress, first.tasks[0].target, first.tasks[0].totalMinutes], [existing.id, remote.due, 30, 70, 120]);
+  assert.equal(first.tasks[0].sourceGroup, 'pku:' + remote.sourceId);
+  assert.match(app.get('task-table-body').innerHTML, /北大教学网/); assert.doesNotMatch(app.get('task-table-body').innerHTML, /pku:aaaa/);
+  assert.doesNotMatch(app.raw(), /private-test-account|private-test-password|pppppppp|pairing|cookie/);
+  assert.equal(requests[0].options.credentials, 'omit'); assert.equal(requests[0].options.redirect, 'error');
+  const body = JSON.parse(requests[0].options.body); assert.equal(body.password, 'private-test-password'); assert.equal(body.remember, true);
+  remote = pkuItem({ due: '2026-11-15T18:00' }); await app.submit('pku-form').settled;
+  assert.equal(app.get('pku-select-0').checked, true); app.get('pku-apply').click();
+  assert.equal(app.saved().tasks.length, 1); assert.equal(app.saved().tasks[0].due, remote.due);
+  assert.equal(app.saved().tasks[0].progress, 30); assert.equal(app.saved().logs.length, 0);
+  assert.deepEqual(JSON.parse(requests[1].options.body), { remember: true }, 'saved login is requested without copying credentials into state');
+  app.get('pku-dialog').close(); app.clickData('action', 'edit-task', existing.id);
+  app.fill('task-form', { title: '我修改后的任务名', totalMinutes: 180 }); app.submit('task-form');
+  assert.equal(app.get('task-error').textContent, ''); assert.equal(app.saved().tasks[0].sourceGroup, 'pku:' + remote.sourceId);
+  app.clickData('action', 'task-cards-view');
+  assert.match(app.get('task-list').innerHTML, /北大教学网/); assert.doesNotMatch(app.get('task-list').innerHTML, /pku:aaaa/);
+});
+
+test('PKU verification keeps credentials in the open form, sends SMS only on click and clears secrets on close', async () => {
+  const requests = []; let attempt = 0;
+  const app = boot({ fetch: async (url, options) => {
+    requests.push({ url, options });
+    if (url.endsWith('/sms')) return pkuResponse({ ok: true });
+    if (++attempt === 1) return pkuResponse({ error: '需要完成统一认证验证', challenge: { captchaRequired: true, mode: 'sms', captchaImage: 'data:image/png;base64,YQ==' } }, 409);
+    return pkuResponse({ items: [pkuItem()], warnings: [] });
+  } });
+  openPKUForm(app); const original = app.raw(); await app.submit('pku-form').settled;
+  assert.equal(requests.length, 1); assert.equal(app.get('pku-verification').hidden, false);
+  assert.equal(app.get('pku-sms-group').hidden, false); assert.equal(app.get('pku-otp-group').hidden, true);
+  assert.equal(app.get('pku-password').value, 'private-test-password');
+  await app.document.dispatch('click', { target: app.get('pku-send-sms') }).settled;
+  assert.equal(requests.length, 2); assert.match(requests[1].url, /\/api\/pku\/sms$/);
+  app.fill('pku-form', { captcha: 'ABCD', sms: '123456' }); await app.submit('pku-form').settled;
+  assert.deepEqual(JSON.parse(requests[2].options.body).verification, { captcha: 'ABCD', sms: '123456' });
+  assert.equal(app.raw(), original); assert.equal(app.get('pku-preview').hidden, false);
+  app.get('pku-dialog').close();
+  for (const id of ['pku-password', 'pku-username', 'pku-captcha', 'pku-sms-code', 'pku-otp-code']) assert.equal(app.get(id).value, '');
+  assert.equal(app.get('pku-preview').hidden, true); assert.equal(app.get('pku-verification').hidden, true);
+  assert.doesNotMatch(app.raw(), /private-test|123456|ABCD/);
+});
+
+test('PKU close aborts a pending request and ignores its late response', async () => {
+  let finish, signal;
+  const app = boot({ fetch: (url, options) => { signal = options.signal; return new Promise(resolve => { finish = resolve; }); } });
+  openPKUForm(app); const original = app.raw(), pending = app.submit('pku-form').settled;
+  assert.equal(app.get('pku-read').disabled, true); app.get('pku-dialog').close(); assert.equal(signal.aborted, true);
+  finish(pkuResponse({ items: [pkuItem()], warnings: [] })); await pending;
+  assert.equal(app.get('pku-preview').hidden, true); assert.equal(app.raw(), original); assert.equal(app.get('pku-error').textContent, '');
+});
+
+test('PKU connection status restores remember preference and unchecking sends an explicit opt-out', async () => {
+  const requests = [], app = boot({ fetch: async (url, options) => {
+    requests.push({ url, options }); return pkuResponse(url.endsWith('/status') ? { remembered: true, connected: false } : { items: [], warnings: [] });
+  } });
+  app.clickData('action', 'open-pku'); app.fill('pku-form', { pairing: 'p'.repeat(64) });
+  await app.document.dispatch('click', { target: app.get('pku-check') }).settled;
+  assert.equal(app.get('pku-remember').checked, true); assert.match(app.get('pku-status').textContent, /已加密记住/);
+  app.fill('pku-form', { remember: false }); await app.submit('pku-form').settled;
+  assert.deepEqual(JSON.parse(requests[1].options.body), { remember: false });
+});
+
+test('PKU direct saved-login sync learns remembered state before posting and refreshes it after a pairing change', async () => {
+  let remembered = true;
+  const requests = [], app = boot({ fetch: async (url, options) => {
+    requests.push({ url, options }); return pkuResponse(url.endsWith('/status') ? { remembered, connected: false } : { items: [], warnings: [] });
+  } });
+  app.clickData('action', 'open-pku'); app.fill('pku-form', { pairing: 'p'.repeat(64) });
+  assert.equal(app.get('pku-remember').checked, false);
+  await app.submit('pku-form').settled;
+  assert.deepEqual(requests.map(request => request.url.split('/').at(-1)), ['status', 'sync']);
+  assert.equal(requests[0].options.signal, requests[1].options.signal, 'status and sync share the same cancellation signal');
+  assert.deepEqual(JSON.parse(requests[1].options.body), { remember: true });
+  assert.equal(app.get('pku-remember').checked, true);
+  remembered = false; app.fill('pku-form', { pairing: 'q'.repeat(64) }); app.get('pku-pairing').dispatch('input');
+  await app.submit('pku-form').settled;
+  assert.deepEqual(requests.slice(2).map(request => request.url.split('/').at(-1)), ['status', 'sync']);
+  assert.deepEqual(JSON.parse(requests[3].options.body), { remember: false });
+  app.get('pku-dialog').close(); app.clickData('action', 'open-pku'); remembered = true;
+  await app.submit('pku-form').settled;
+  assert.deepEqual(requests.slice(4).map(request => request.url.split('/').at(-1)), ['status', 'sync']);
+  assert.deepEqual(JSON.parse(requests[5].options.body), { remember: true });
+});
+
+test('PKU explicit remember opt-out wins over status and skips automatic preference restoration', async () => {
+  const requests = [], app = boot({ fetch: async (url, options) => {
+    requests.push({ url, options }); return pkuResponse(url.endsWith('/status') ? { remembered: true, connected: false } : { items: [], warnings: [] });
+  } });
+  app.clickData('action', 'open-pku'); app.fill('pku-form', { pairing: 'p'.repeat(64), remember: false });
+  app.get('pku-remember').dispatch('change');
+  await app.document.dispatch('click', { target: app.get('pku-check') }).settled;
+  assert.equal(app.get('pku-remember').checked, false, 'checking connection respects a deliberate checkbox choice');
+  await app.submit('pku-form').settled;
+  assert.deepEqual(requests.map(request => request.url.split('/').at(-1)), ['status', 'sync']);
+  assert.deepEqual(JSON.parse(requests[1].options.body), { remember: false });
+});
+
+test('PKU cancellation during automatic status discovery prevents a later credential sync', async () => {
+  let finish, signal; const requests = [], app = boot({ fetch: (url, options) => {
+    requests.push(url); signal = options.signal; return new Promise(resolve => { finish = resolve; });
+  } });
+  app.clickData('action', 'open-pku'); app.fill('pku-form', { pairing: 'p'.repeat(64) });
+  const pending = app.submit('pku-form').settled; app.get('pku-dialog').close(); assert.equal(signal.aborted, true);
+  finish(pkuResponse({ remembered: true, connected: false })); await pending;
+  assert.equal(requests.length, 1); assert.match(requests[0], /\/status$/); assert.equal(app.get('pku-preview').hidden, true);
+});
+
+test('PKU merge rejects newer task changes and a failed-save retry creates each imported task once', async () => {
+  const options = { fetch: async () => pkuResponse({ items: [pkuItem()], warnings: [] }) }, app = boot(options);
+  openPKUForm(app); await app.submit('pku-form').settled;
+  const newer = app.saved(); newer.tasks.push({ id: 'newer-task', title: '另一项更新', kind: 'task', category: '生活', due: '', progress: 0, target: 100, totalMinutes: null, importance: null, enjoyment: null, nextAction: '' });
+  app.storageEvent(JSON.stringify(newer)); app.get('pku-apply').click();
+  assert.match(app.get('pku-error').textContent, /已有更新/); assert.equal(app.saved().tasks.length, 1);
+  await app.submit('pku-form').settled; options.writeError = true; app.get('pku-apply').click();
+  assert.match(app.get('pku-error').textContent, /保存失败/); assert.equal(app.get('pku-apply').textContent, '重试保存');
+  options.writeError = false; app.get('pku-apply').click(); assert.equal(app.get('pku-error').textContent, '');
+  assert.equal(app.saved().tasks.length, 2); assert.equal(app.saved().tasks.filter(task => task.sourceGroup.startsWith('pku:')).length, 1);
+  app.get('pku-apply').click(); assert.equal(app.saved().tasks.length, 2);
 });

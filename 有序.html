@@ -631,6 +631,33 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
 
+.pku-dialog { width: min(780px, calc(100vw - 48px)); }
+.pku-setup, .pku-verification { padding: 15px 17px; margin: 18px 0; border: 1px solid var(--line); border-left: 3px solid var(--purple, #a78bfa); background: var(--surface); }
+.pku-setup p, .pku-verification p { margin: 0 0 7px; line-height: 1.7; }
+.pku-setup p:last-child, .pku-verification p:last-child { margin-bottom: 0; }
+.pku-verification label { display: grid; gap: 8px; margin-top: 12px; }
+.pku-verification img { max-width: 240px; max-height: 100px; margin: 9px 0; border-radius: 4px; }
+#pku-send-sms { margin-top: 10px; }
+.pku-preview { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
+.pku-preview h3 { margin: 0 0 12px; }
+.pku-item-list { display: grid; gap: 12px; margin-top: 15px; }
+.pku-item { padding: 15px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.pku-item-heading { display: flex; align-items: flex-start; gap: 11px; cursor: pointer; }
+.pku-item-heading input { flex: 0 0 auto; margin: 4px 0 0; accent-color: var(--green, #83ff8a); }
+.pku-item-heading span { min-width: 0; }
+.pku-item-heading strong { display: block; font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.pku-item-heading small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.pku-item-date { margin: 10px 0 0 26px; color: var(--muted); font-family: var(--mono); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.pku-match-label { display: grid; gap: 7px; margin: 13px 0 0 26px; font-size: 12px; color: var(--muted); }
+.pku-request-actions { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .pku-dialog { width: calc(100vw - 24px); }
+  .pku-request-actions > .danger-text { flex-basis: 100%; justify-content: flex-start; }
+  .pku-request-actions > .button { flex: 1; min-width: 0; padding-inline: 11px; }
+  .pku-item { padding: 13px 12px; }
+  .pku-item-date, .pku-match-label { margin-left: 0; }
+}
+
   </style>
 </head>
 <body>
@@ -660,7 +687,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
 
     <section id="view-tasks" class="view" aria-labelledby="tasks-title" hidden>
       <div class="page-heading"><div><p class="eyebrow">TASKS</p><h1 id="tasks-title">任务清单</h1><p class="subtitle">集中编辑截止日期、估时、进度和目标；离开输入框自动保存。</p></div><div class="button-row"><button type="button" class="button secondary" data-action="open-ai">AI 修改任务</button><label class="button secondary file-button">批量追加任务<input id="task-batch-import" type="file" accept=".json,application/json" hidden></label><select id="task-filter" class="select" aria-label="筛选任务"><option value="active">待完成</option><option value="reached">本轮已达标</option><option value="done">已完成 / 已结束</option><option value="events">固定事件</option><option value="all">全部任务</option></select></div></div>
-      <div class="button-row task-view-switch" role="group" aria-label="任务查看方式"><button id="task-table-toggle" class="button secondary" type="button" data-action="task-table-view" aria-pressed="true" aria-controls="task-table-panel">表格编辑</button><button id="task-cards-toggle" class="button secondary" type="button" data-action="task-cards-view" aria-pressed="false" aria-controls="task-list">卡片视图</button></div>
+      <div class="button-row task-view-switch" role="group" aria-label="任务查看方式"><button id="task-table-toggle" class="button secondary" type="button" data-action="task-table-view" aria-pressed="true" aria-controls="task-table-panel">表格编辑</button><button id="task-cards-toggle" class="button secondary" type="button" data-action="task-cards-view" aria-pressed="false" aria-controls="task-list">卡片视图</button><button class="button secondary" type="button" data-action="open-pku">教学网同步</button></div>
       <div id="task-table-panel" class="task-table-panel">
         <p id="task-table-help" class="task-table-help">直接填预计用时、进度和目标，离开输入框自动保存。Enter 同列下一行，Tab 下一格。时刻可留空。</p>
         <p id="task-table-status" class="muted small task-table-status" role="status" aria-live="polite"></p>
@@ -706,6 +733,26 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       <div class="dialog-footer ai-request-actions"><button type="button" class="text-button" data-action="clear-ai-key">清除密钥</button><button type="button" class="button secondary" data-action="cancel-ai" id="ai-cancel-request" hidden>取消生成</button><button type="submit" class="button primary" id="ai-generate">生成修改方案</button></div>
     </form>
     <section id="ai-preview" class="ai-preview" hidden aria-labelledby="ai-preview-title"><h3 id="ai-preview-title">待应用的修改</h3><p id="ai-summary" class="ai-summary"></p><div id="ai-change-list" class="ai-change-list"></div><div class="ai-preview-actions"><button id="ai-apply" class="button primary" data-action="apply-ai" type="button" disabled>应用到任务</button></div></section>
+  </dialog>
+  <dialog id="pku-dialog" class="dialog pku-dialog" aria-labelledby="pku-dialog-title">
+    <form id="pku-form" autocomplete="off">
+      <div class="dialog-heading"><div><p class="eyebrow">PKU · LOCAL SYNC</p><h2 id="pku-dialog-title">北京大学教学网同步</h2></div><button class="icon-button" type="button" data-close="pku-dialog" aria-label="关闭教学网同步">×</button></div>
+      <p class="subtitle">读取最近 30 天至未来 180 天的作业 DDL，核对后合并到当前浏览器的任务。</p>
+      <div class="pku-setup"><p>先双击程序目录里的 <strong>启动教学网同步.cmd</strong>，保持连接器窗口开启，再填写窗口中的配对码。</p><p class="muted small">本机连接器：127.0.0.1:4174 · 也可运行 npm run pku</p></div>
+      <label>连接器配对码<small>仅本次页面使用</small><input id="pku-pairing" name="pairing" type="password" autocomplete="off" spellcheck="false" maxlength="128" required></label>
+      <div class="form-grid"><label>校园卡账号<small>已记住登录时可留空</small><input id="pku-username" name="username" type="text" autocomplete="off" spellcheck="false" maxlength="100"></label><label>密码<input id="pku-password" name="password" type="password" autocomplete="off" maxlength="1000"></label></div>
+      <label class="flag-option"><input id="pku-remember" name="remember" type="checkbox">在这台电脑上加密记住登录</label>
+      <p class="muted small">登录信息由本机连接器交给北大统一认证；记住登录使用 Windows 当前用户加密，保存在本机应用数据目录。任务备份与 AI 指令仅包含任务资料。</p>
+      <section id="pku-verification" class="pku-verification" hidden aria-label="统一认证二次验证">
+        <p id="pku-verification-message" class="muted small">请完成北大统一认证要求的验证，再次点击“读取 DDL”。</p>
+        <div id="pku-captcha-group" hidden><img id="pku-captcha-image" alt="北大统一认证图形验证码" hidden><label>图形验证码<input id="pku-captcha" name="captcha" type="text" autocomplete="off" maxlength="20"></label></div>
+        <div id="pku-sms-group" hidden><label>短信验证码<input id="pku-sms-code" name="sms" type="text" inputmode="numeric" autocomplete="off" maxlength="20"></label><button id="pku-send-sms" class="button secondary" type="button" data-action="pku-sms">发送验证码</button></div>
+        <div id="pku-otp-group" hidden><label>手机令牌动态码<input id="pku-otp-code" name="otp" type="text" inputmode="numeric" autocomplete="off" maxlength="20"></label></div>
+      </section>
+      <p id="pku-status" class="ai-status" role="status" aria-live="polite"></p><p id="pku-error" class="form-error" role="alert"></p>
+      <div class="dialog-footer pku-request-actions"><button id="pku-forget" type="button" class="text-button danger-text" data-action="pku-forget">清除本机登录</button><button id="pku-check" type="button" class="button secondary" data-action="pku-check">检查连接</button><button id="pku-cancel" type="button" class="button secondary" data-action="pku-cancel" hidden>取消读取</button><button id="pku-read" type="submit" class="button primary">读取 DDL</button></div>
+    </form>
+    <section id="pku-preview" class="pku-preview" hidden aria-labelledby="pku-preview-title"><h3 id="pku-preview-title">待同步事项</h3><p id="pku-summary" class="muted small"></p><p id="pku-warnings" class="muted small"></p><p class="muted small">时间按北京时间显示；同名任务可选择关联。更新 DDL 会保留你的进度、目标和估时。</p><div id="pku-item-list" class="pku-item-list"></div><div class="ai-preview-actions"><button id="pku-apply" class="button primary" type="button" data-action="pku-apply" disabled>确认合并到任务</button></div></section>
   </dialog>
   <dialog id="confirm-dialog" class="dialog compact-dialog"><div class="dialog-heading"><h2 id="confirm-title">确认操作</h2><button class="icon-button" type="button" data-close="confirm-dialog" aria-label="关闭">×</button></div><p id="confirm-message" class="subtitle"></p><div class="dialog-footer"><button class="button secondary" data-close="confirm-dialog">取消</button><button class="button primary" id="confirm-accept">确认</button></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -2001,9 +2048,123 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
 
 </script>
 <script>
+(function (root, factory) {
+  'use strict';
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./data.js'));
+  else root.PlannerPKU = factory(root.PlannerData);
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (D) {
+  'use strict';
+  const ENDPOINT = 'http://127.0.0.1:4174';
+  const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+  const plain = value => !!value && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+  const cleanTitle = value => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+  const fail = message => ({ ok: false, errors: [message] });
+  function validDue(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T(?:[01]\d|2[0-3]):[0-5]\d)?$/.test(value)) return false;
+    const [year, month, day] = value.slice(0, 10).split('-').map(Number), date = new Date(year, month - 1, day, 12);
+    return year >= 1900 && year <= 2200 && date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }
+  function normalizeItems(input) {
+    if (!Array.isArray(input) || input.length > 5000) throw new Error('教学网返回的事项数量无效，请缩小同步范围。');
+    const seen = new Set();
+    return input.map(item => {
+      if (!plain(item) || typeof item.sourceId !== 'string' || !/^[A-Za-z0-9:_-]{1,96}$/.test(item.sourceId) || seen.has(item.sourceId)) throw new Error('教学网事项的来源标识无效或重复。');
+      seen.add(item.sourceId);
+      if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 200 || typeof item.course !== 'string' || item.course.length > 200 || !validDue(item.due)) throw new Error('教学网事项的名称、课程或截止时间无效。');
+      if (typeof item.sourceUrl !== 'string' || item.sourceUrl.length > 2000 || !/^https:\/\/course\.pku\.edu\.cn\/(?!\/)[^\s<>"\\]*$/.test(item.sourceUrl)) throw new Error('教学网事项来源地址无效。');
+      const title = item.title.trim(), course = item.course.trim();
+      return { sourceId: item.sourceId, title, course, due: item.due, sourceUrl: item.sourceUrl,
+        displayTitle: (course ? '【' + course + '】' : '') + title };
+    });
+  }
+  function createPlan(state, input) {
+    const checked = D.validateState(state); if (!checked.ok) return fail('当前任务数据无效，请先恢复本地数据。');
+    let items; try { items = normalizeItems(input); } catch (error) { return fail(error.message); }
+    const tasks = checked.value.tasks;
+    const rows = [];
+    for (const item of items) {
+      const group = 'pku:' + item.sourceId, linked = tasks.filter(task => task.sourceGroup === group);
+      if (linked.length > 1) return fail('多个本地任务关联到同一教学网事项，请先整理重复关联。');
+      const task = linked[0];
+      if (task && D.isEvent(task)) return fail('教学网作业已被改为固定事件，请先解除关联或恢复为任务。');
+      const titles = [item.title, item.displayTitle].map(cleanTitle);
+      const candidates = task ? [] : tasks.filter(candidate => !D.isEvent(candidate) && !candidate.sourceGroup.startsWith('pku:') && titles.includes(cleanTitle(candidate.title)))
+        .map(candidate => ({ id: candidate.id, title: candidate.title, due: candidate.due }));
+      rows.push({ item, taskId: task ? task.id : '', beforeDue: task ? task.due : '', candidates,
+        type: task ? (task.due === item.due ? 'unchanged' : 'update') : 'create' });
+    }
+    return { ok: true, errors: [], baseTasks: JSON.stringify(state.tasks), rows };
+  }
+  function applyPlan(state, plan, selections) {
+    if (!plan || !plan.ok || !Array.isArray(plan.rows) || plan.baseTasks !== JSON.stringify(state.tasks)) return fail('任务已有更新，请重新读取 DDL 后再合并。');
+    if (!Array.isArray(selections) || selections.length > plan.rows.length) return fail('同步选择无效。');
+    const next = JSON.parse(JSON.stringify(state)), sources = new Set(), targets = new Set();
+    let added = 0, updated = 0, linked = 0;
+    for (const choice of selections) {
+      if (!plain(choice) || typeof choice.sourceId !== 'string' || sources.has(choice.sourceId) || !(choice.targetId === null || typeof choice.targetId === 'string')) return fail('同步选择无效或重复。');
+      sources.add(choice.sourceId);
+      const row = plan.rows.find(entry => entry.item.sourceId === choice.sourceId); if (!row) return fail('所选教学网事项已失效，请重新读取。');
+      const group = 'pku:' + row.item.sourceId;
+      let task;
+      if (row.taskId) {
+        if (choice.targetId !== row.taskId) return fail('已关联事项应更新原任务。');
+        task = next.tasks.find(entry => entry.id === row.taskId);
+      } else if (choice.targetId !== null) {
+        if (!row.candidates.some(candidate => candidate.id === choice.targetId)) return fail('只能关联预览中列出的同名任务。');
+        task = next.tasks.find(entry => entry.id === choice.targetId);
+      }
+      if (task) {
+        if (targets.has(task.id) || D.isEvent(task) || task.sourceGroup.startsWith('pku:') && task.sourceGroup !== group) return fail('一个本地任务只能关联一个教学网事项。');
+        targets.add(task.id);
+        if (task.due !== row.item.due) updated += 1;
+        if (task.sourceGroup !== group) linked += 1;
+        task.due = row.item.due; task.sourceGroup = group;
+      } else {
+        if (row.taskId || choice.targetId !== null) return fail('原任务不存在，请重新读取 DDL。');
+        next.tasks.push({ id: D.id(), title: row.item.displayTitle.slice(0, 200), kind: 'task', category: '课业',
+          due: row.item.due, progress: 0, target: 100, totalMinutes: null, importance: null, enjoyment: null,
+          nextAction: '', flagged: false, sourceGroup: group });
+        added += 1;
+      }
+    }
+    const checked = D.validateState(next); if (!checked.ok) return fail(checked.errors.join(' '));
+    return { ok: true, errors: [], value: checked.value, added, updated, linked };
+  }
+  function normalizeChallenge(value) {
+    if (!plain(value) || typeof value.captchaRequired !== 'boolean' || !['none', 'sms', 'otp'].includes(value.mode)) return null;
+    const result = { captchaRequired: value.captchaRequired, mode: value.mode };
+    if (value.captchaImage && typeof value.captchaImage === 'string' && value.captchaImage.length < 500000 && /^data:image\/(?:png|jpeg|gif);base64,[A-Za-z0-9+/=]+$/.test(value.captchaImage)) result.captchaImage = value.captchaImage;
+    return result;
+  }
+  async function request(options) {
+    const { path, method = 'GET', body, signal } = options;
+    const key = typeof options.key === 'string' ? options.key.trim() : '';
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(key)) throw new Error('请先输入连接器窗口显示的配对码。');
+    if (!['GET /api/pku/status', 'POST /api/pku/sync', 'POST /api/pku/sms', 'DELETE /api/pku/credentials'].includes(method + ' ' + path)) throw new Error('同步操作无效。');
+    let response;
+    try { response = await (options.fetchImpl || globalThis.fetch)(ENDPOINT + path, { method, signal, credentials: 'omit', redirect: 'error',
+      headers: { Authorization: 'Bearer ' + key, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }); }
+    catch (error) { if (signal && signal.aborted) throw new Error('已取消同步。'); throw new Error('无法连接本机同步服务。请先运行“启动教学网同步.cmd”，并允许浏览器访问本地网络。'); }
+    const text = await response.text(); if (text.length > 2 * 1024 * 1024) throw new Error('同步响应过大，请稍后重试。');
+    let value; try { value = JSON.parse(text); } catch { throw new Error('本机同步服务响应无效。'); }
+    if (!plain(value)) throw new Error('本机同步服务响应无效。');
+    if (!response.ok) {
+      let message = typeof value.error === 'string' && value.error.length <= 500 ? value.error : '教学网同步失败，请重试。';
+      for (const secret of [key, body && body.password, body && body.username].filter(Boolean)) message = message.split(secret).join('[已隐藏]');
+      const error = new Error(message); error.status = response.status;
+      if (response.status === 409) error.challenge = normalizeChallenge(value.challenge);
+      throw error;
+    }
+    return value;
+  }
+  return { ENDPOINT, createPlan, applyPlan, normalizeItems, normalizeChallenge, request };
+});
+
+</script>
+<script>
 (function () {
   'use strict';
-  const P = window.Planner, D = window.PlannerData, A = window.PlannerAI;
+  const P = window.Planner, D = window.PlannerData, A = window.PlannerAI, K = window.PlannerPKU;
   const $ = id => document.getElementById(id);
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -2018,6 +2179,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   function stageText(task) {
     return (task.progress == null ? '进度待填写' : percent(task.progress)) + ' → ' + (task.target == null ? '目标待设置' : percent(task.target));
   }
+  function taskSourceLabel(task) { return task.sourceGroup.startsWith('pku:') ? '北大教学网' : task.sourceGroup; }
   function rememberImportHistory(candidate) {
     const bundled = window.PlannerImports && Array.isArray(window.PlannerImports.batches) ? window.PlannerImports.batches.map(batch => batch.id).filter(Boolean) : [];
     candidate.appliedBatches = Array.from(new Set([...(state.appliedBatches || []), ...(candidate.appliedBatches || []), ...bundled]));
@@ -2030,6 +2192,8 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   const tableDrafts = new Map(), tableErrors = new Map();
   const tableLabels = { dueDate: '日期', dueTime: '时刻', eventEnd: '结束时刻', totalMinutes: '整体预计分钟', progress: '当前进度', target: '本轮目标', importance: '重要性', enjoyment: '愉悦性' };
   let aiPending = null, aiController = null, aiRequestVersion = 0;
+  let pkuPending = null, pkuController = null, pkuRequestVersion = 0, pkuChallenge = null;
+  let pkuRememberKnown = false, pkuRememberTouched = false, pkuRememberKey = '';
 
   function notify(message) {
     $('toast').textContent = message; $('toast').hidden = false;
@@ -2198,7 +2362,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     $('task-list').innerHTML = tasks.length ? tasks.map(task => {
       const m = D.taskMetrics(task);
       if (D.isEvent(task)) return '<article class="task-card event-card"><div class="task-card-top"><span class="task-category">固定事件 · ' + esc(task.category) + '</span><span class="tag">' + eventStateText(task) + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="event-meta">' + esc(eventTimeText(task)) + (task.eventLocation ? ' · ' + esc(task.eventLocation) : '') + '</p>' + (task.nextAction ? '<p class="task-next">' + esc(task.nextAction) + '</p>' : '') + '<p class="muted small">按固定时间参加；备考或准备工作可另外创建任务。</p><div class="task-actions">' + eventActions(task) + '<button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
-      return '<article class="task-card"><div class="task-card-top"><span class="task-category">' + esc(task.category) + '</span><span class="tag">' + (m.done ? '全部完成' : m.stageReached ? '本轮已达标' : m.remaining == null ? '待补充参数' : '进行中') + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="task-meta">' + esc(dueText(task)) + '</p>' + progressMarkup(task) + '<p class="task-next">' + esc(task.nextAction || '未设置下一步行动。') + '</p><div class="muted small">整体预计 ' + durationText(task.totalMinutes) + ' · 本轮 ' + durationText(m.remaining) + (task.sourceGroup ? ' · ' + esc(task.sourceGroup) : '') + '</div><div class="task-actions"><button class="button secondary" data-action="' + (m.remaining == null ? 'edit-task' : 'progress') + '" data-id="' + esc(task.id) + '">' + (m.remaining == null ? '补充参数' : m.stageReached && !m.done ? '设置下一目标' : '更新进度') + '</button><button class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
+      return '<article class="task-card"><div class="task-card-top"><span class="task-category">' + esc(task.category) + '</span><span class="tag">' + (m.done ? '全部完成' : m.stageReached ? '本轮已达标' : m.remaining == null ? '待补充参数' : '进行中') + '</span></div><h3>' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</h3><p class="task-meta">' + esc(dueText(task)) + '</p>' + progressMarkup(task) + '<p class="task-next">' + esc(task.nextAction || '未设置下一步行动。') + '</p><div class="muted small">整体预计 ' + durationText(task.totalMinutes) + ' · 本轮 ' + durationText(m.remaining) + (task.sourceGroup ? ' · ' + esc(taskSourceLabel(task)) : '') + '</div><div class="task-actions"><button class="button secondary" data-action="' + (m.remaining == null ? 'edit-task' : 'progress') + '" data-id="' + esc(task.id) + '">' + (m.remaining == null ? '补充参数' : m.stageReached && !m.done ? '设置下一目标' : '更新进度') + '</button><button class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '">编辑</button><button class="text-button danger-text" data-action="delete-task" data-id="' + esc(task.id) + '">删除</button></div></article>';
     }).join('') : emptyMarkup('当前筛选无任务', '更换筛选条件或添加任务。', 'new-task', '添加任务');
     if (!options || options.taskTable !== false) renderTaskTable(!!(options && options.forceTable));
   }
@@ -2252,7 +2416,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       const event = D.isEvent(task), m = D.taskMetrics(task), label = event ? '固定事件 · ' + eventStateText(task) : m.done ? '全部完成' : m.stageReached ? '本轮已达标' : '可推进任务';
       const dates = '<div class="table-date-fields"><label><small>' + (event ? '发生日期' : '截止日期') + '</small>' + tableInput(task, 'dueDate', 'date') + '</label><label><small>' + (event ? '开始时刻（选填）' : '截止时刻（选填）') + '</small>' + tableInput(task, 'dueTime', 'time') + '</label>' + (event ? '<label><small>结束时刻（选填）</small>' + tableInput(task, 'eventEnd', 'datetime-local') + '</label>' : '') + '</div>';
       const work = event ? '<td colspan="5" class="table-readonly">固定活动只设置发生时间，<br>不使用预计工作量或进度百分比。</td>' : '<td>' + tableInput(task, 'totalMinutes', 'number', ' class="table-number" min="5" max="60000" step="1" placeholder="待估时"') + tableEstimateButton(task) + '</td><td>' + tableInput(task, 'progress', 'number', ' class="table-number" min="0" max="100" step="0.1" placeholder="0"') + '</td><td>' + tableInput(task, 'target', 'number', ' class="table-number" min="1" max="100" step="0.1" placeholder="100"') + '</td><td>' + tableRating(task, 'importance') + '</td><td>' + tableRating(task, 'enjoyment') + '</td>';
-      return '<tr' + (event ? ' class="event-table-row"' : '') + '><th scope="row"><span class="table-name">' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</span><span class="table-task-meta">' + esc(task.category + ' · ' + label) + (task.sourceGroup ? ' · ' + esc(task.sourceGroup) : '') + '</span></th><td>' + dates + '</td>' + work + '<td><button id="' + esc('grid-details-' + task.id) + '" class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '" aria-label="' + esc('查看' + task.title + '详情') + '">详情</button></td></tr>';
+      return '<tr' + (event ? ' class="event-table-row"' : '') + '><th scope="row"><span class="table-name">' + (task.flagged ? '🔴 ' : '') + esc(task.title) + '</span><span class="table-task-meta">' + esc(task.category + ' · ' + label) + (task.sourceGroup ? ' · ' + esc(taskSourceLabel(task)) : '') + '</span></th><td>' + dates + '</td>' + work + '<td><button id="' + esc('grid-details-' + task.id) + '" class="text-button" data-action="edit-task" data-id="' + esc(task.id) + '" aria-label="' + esc('查看' + task.title + '详情') + '">详情</button></td></tr>';
     }).join('');
     refreshTableError();
   }
@@ -2519,6 +2683,144 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     clearAIPlan(); $('ai-error').textContent = ''; $('ai-status').textContent = '已应用并保存 ' + count + ' 项修改。';
     notify('AI 修改已保存，排行榜已更新。');
   }
+  function clearPKUPlan() {
+    pkuPending = null; $('pku-preview').hidden = true; $('pku-item-list').innerHTML = '';
+    $('pku-summary').textContent = ''; $('pku-warnings').textContent = ''; $('pku-apply').disabled = true;
+    $('pku-apply').textContent = '确认合并到任务';
+  }
+  function cancelPKURequest() {
+    pkuRequestVersion += 1; if (pkuController) pkuController.abort(); pkuController = null;
+    ['pku-read', 'pku-check', 'pku-forget', 'pku-send-sms'].forEach(id => { $(id).disabled = false; });
+    $('pku-cancel').hidden = true;
+  }
+  function clearPKUVerification() {
+    pkuChallenge = null; $('pku-verification').hidden = true;
+    ['pku-captcha', 'pku-sms-code', 'pku-otp-code'].forEach(id => { $(id).value = ''; });
+    $('pku-captcha-image').hidden = true; $('pku-captcha-image').removeAttribute('src');
+  }
+  function renderPKUChallenge(challenge) {
+    clearPKUVerification(); pkuChallenge = challenge; $('pku-verification').hidden = false;
+    $('pku-captcha-group').hidden = !challenge.captchaRequired;
+    $('pku-sms-group').hidden = challenge.mode !== 'sms'; $('pku-otp-group').hidden = challenge.mode !== 'otp';
+    if (challenge.captchaImage) { $('pku-captcha-image').src = challenge.captchaImage; $('pku-captcha-image').hidden = false; }
+  }
+  function openPKU() {
+    if (storageLocked) { notify('请先恢复本地数据，再同步教学网。'); return; }
+    if (tableDrafts.size) { notify('表格中还有未保存的编辑，请先保存或修正后再同步。'); return; }
+    cancelPKURequest(); clearPKUPlan(); clearPKUVerification();
+    pkuRememberKnown = false; pkuRememberTouched = false; pkuRememberKey = $('pku-pairing').value.trim();
+    $('pku-error').textContent = ''; $('pku-status').textContent = '首次使用先启动本机连接器并填写配对码。';
+    $('pku-dialog').showModal();
+  }
+  function acceptPKUStatus(result, form) {
+    if (typeof result.remembered !== 'boolean' || typeof result.connected !== 'boolean') throw new Error('连接器状态响应无效，请更新连接器。');
+    if (!pkuRememberTouched && !form.elements.username.value && !form.elements.password.value) {
+      form.elements.remember.checked = result.remembered; pkuRememberKnown = true;
+    } else pkuRememberKnown = pkuRememberTouched;
+  }
+  function renderPKUPlan(plan) {
+    $('pku-item-list').innerHTML = plan.rows.map((row, index) => {
+      const unchanged = row.type === 'unchanged', candidates = row.candidates.length > 0;
+      const label = unchanged ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : candidates ? '发现同名任务' : '新增任务';
+      return '<article class="pku-item"><label class="pku-item-heading"><input id="pku-select-' + index + '" type="checkbox"' + (unchanged ? ' disabled' : !candidates ? ' checked' : '') + '><span><strong>' + esc(row.item.displayTitle) + '</strong><small>' + esc(label) + '</small></span></label>' +
+        '<p class="pku-item-date">' + (row.type === 'update' ? esc(row.beforeDue.replace('T', ' ') || '未设 DDL') + ' → ' : '') + esc(row.item.due.replace('T', ' ')) + '</p>' +
+        (candidates ? '<label class="pku-match-label" for="pku-target-' + index + '">处理方式<select id="pku-target-' + index + '" data-pku-index="' + index + '"><option value="" selected>请选择关联或另建</option><option value="new">另建为新任务</option>' + row.candidates.map(task => '<option value="' + esc(task.id) + '">关联：' + esc(task.title) + '（' + esc(task.due.replace('T', ' ') || '未设 DDL') + '）</option>').join('') + '</select></label>' : '') + '</article>';
+    }).join('');
+    const changed = plan.rows.filter(row => row.type !== 'unchanged').length;
+    $('pku-summary').textContent = '读取到 ' + plan.rows.length + ' 件事项，其中 ' + changed + ' 件可新增、关联或更新。';
+    $('pku-preview').hidden = false; $('pku-apply').disabled = !changed;
+  }
+  async function runPKUOperation(operation, event) {
+    if (event) event.preventDefault();
+    if (storageLocked || tableDrafts.size) { $('pku-error').textContent = '请先恢复本地数据并保存表格编辑，再同步教学网。'; return; }
+    const form = $('pku-form'); if (!form.reportValidity()) return;
+    cancelPKURequest(); clearPKUPlan(); $('pku-error').textContent = '';
+    const version = pkuRequestVersion; pkuController = new AbortController();
+    ['pku-read', 'pku-check', 'pku-forget', 'pku-send-sms'].forEach(id => { $(id).disabled = true; });
+    $('pku-cancel').hidden = false;
+    $('pku-status').textContent = operation === 'sync' ? '正在登录教学网并读取 DDL…' : operation === 'sms' ? '正在请求短信验证码…' : operation === 'forget' ? '正在清除本机登录…' : '正在检查本机连接…';
+    const timeout = setTimeout(() => { if (version === pkuRequestVersion && pkuController) pkuController.abort(); }, 90000);
+    try {
+      const options = { key: form.elements.pairing.value, signal: pkuController.signal };
+      if (options.key.trim() !== pkuRememberKey) { pkuRememberKnown = false; pkuRememberKey = options.key.trim(); }
+      if (operation === 'sync') {
+        const username = form.elements.username.value.trim(), password = form.elements.password.value;
+        if (!!username !== !!password) throw new Error('首次登录请同时填写校园卡账号和密码；使用已记住的登录时两项留空。');
+        if (!username && !pkuRememberKnown && !pkuRememberTouched) {
+          const status = await K.request({ ...options, path: '/api/pku/status' });
+          if (version !== pkuRequestVersion) return;
+          acceptPKUStatus(status, form);
+        }
+        options.path = '/api/pku/sync'; options.method = 'POST'; options.body = { remember: form.elements.remember.checked };
+        if (username) Object.assign(options.body, { username, password, remember: form.elements.remember.checked });
+        if (pkuChallenge) {
+          const verification = {};
+          if (pkuChallenge.captchaRequired) verification.captcha = form.elements.captcha.value.trim();
+          if (pkuChallenge.mode === 'sms') verification.sms = form.elements.sms.value.trim();
+          if (pkuChallenge.mode === 'otp') verification.otp = form.elements.otp.value.trim();
+          options.body.verification = verification;
+        }
+      } else if (operation === 'forget') { options.path = '/api/pku/credentials'; options.method = 'DELETE'; }
+      else if (operation === 'sms') { options.path = '/api/pku/sms'; options.method = 'POST'; options.body = {}; }
+      else options.path = '/api/pku/status';
+      const result = await K.request(options); if (version !== pkuRequestVersion) return;
+      if (operation === 'sync') {
+        const plan = K.createPlan(state, result.items); if (!plan.ok) throw new Error(plan.errors.join(' '));
+        pkuPending = { plan, appliedInMemory: false }; renderPKUPlan(plan);
+        $('pku-warnings').textContent = Array.isArray(result.warnings) ? result.warnings.filter(value => typeof value === 'string').slice(0, 10).join(' ') : '';
+        $('pku-status').textContent = 'DDL 已读取，请选择要合并的事项。';
+        pkuRememberKnown = true;
+        form.elements.password.value = ''; form.elements.username.value = ''; clearPKUVerification();
+      } else if (operation === 'forget') {
+        form.elements.password.value = ''; form.elements.username.value = ''; form.elements.remember.checked = false; clearPKUVerification();
+        pkuRememberKnown = true; pkuRememberTouched = false;
+        $('pku-status').textContent = '本机保存的登录信息及当前教学网会话已清除。';
+      } else if (operation === 'sms') $('pku-status').textContent = '短信请求已发送，请填写收到的验证码后再次读取 DDL。';
+      else {
+        acceptPKUStatus(result, form);
+        $('pku-status').textContent = '连接成功。' + (result.remembered ? '本机已加密记住登录，可留空账号密码直接读取。' : '请填写校园卡账号和密码。') + (result.connected ? '当前教学网会话有效。' : '');
+      }
+    } catch (error) {
+      if (version !== pkuRequestVersion) return;
+      if (error.challenge) { renderPKUChallenge(error.challenge); $('pku-status').textContent = '统一认证需要验证，请填写后再次读取 DDL。'; }
+      else $('pku-status').textContent = '当前任务保持原样。';
+      $('pku-error').textContent = error.message || '教学网同步失败，请重试。';
+    } finally {
+      clearTimeout(timeout);
+      if (version === pkuRequestVersion) { pkuController = null; ['pku-read', 'pku-check', 'pku-forget', 'pku-send-sms'].forEach(id => { $(id).disabled = false; }); $('pku-cancel').hidden = true; }
+    }
+  }
+  function applyPKUPlan() {
+    if (!pkuPending) return;
+    if (storageLocked || tableDrafts.size) { $('pku-error').textContent = '请先恢复本地数据并保存表格编辑，再合并。'; return; }
+    let checked;
+    if (pkuPending.appliedInMemory) {
+      if (JSON.stringify(state.tasks) !== pkuPending.plan.baseTasks) { clearPKUPlan(); $('pku-error').textContent = '任务已有更新，请重新读取 DDL。'; return; }
+      checked = { ok: true, value: JSON.parse(JSON.stringify(state)) };
+    } else {
+      const selections = [];
+      for (let index = 0; index < pkuPending.plan.rows.length; index++) {
+        const row = pkuPending.plan.rows[index]; if (!$('pku-select-' + index).checked || row.type === 'unchanged') continue;
+        let targetId = row.taskId || null;
+        if (row.candidates.length) {
+          const choice = $('pku-target-' + index).value;
+          if (!choice) { $('pku-error').textContent = '请为所选同名事项选择“关联”或“另建”。'; return; }
+          targetId = choice === 'new' ? null : choice;
+        }
+        selections.push({ sourceId: row.item.sourceId, targetId });
+      }
+      if (!selections.length) { $('pku-error').textContent = '请至少勾选一件需要合并的事项。'; return; }
+      checked = K.applyPlan(state, pkuPending.plan, selections);
+      if (!checked.ok) { $('pku-error').textContent = checked.errors.join(' '); return; }
+    }
+    const error = commit(checked.value, { forceTable: true });
+    if (error) {
+      pkuPending.appliedInMemory = JSON.stringify(state.tasks) === JSON.stringify(checked.value.tasks); pkuPending.plan.baseTasks = JSON.stringify(state.tasks);
+      $('pku-error').textContent = error; $('pku-apply').textContent = pkuPending.appliedInMemory ? '重试保存' : '确认合并到任务'; return;
+    }
+    clearPKUPlan(); $('pku-error').textContent = ''; $('pku-status').textContent = '教学网事项已合并并保存在当前浏览器。';
+    notify('教学网 DDL 已同步，排行榜已更新。');
+  }
   function updateEstimate() {
     const f = $('task-form'), task = { totalMinutes: optionalNumber(f.elements.totalMinutes.value), progress: optionalNumber(f.elements.progress.value) ?? 0, target: optionalNumber(f.elements.target.value) ?? 100 };
     const m = D.taskMetrics(task); $('stage-estimate').textContent = m.remaining != null && Number.isFinite(m.remaining) ? P.formatMinutes(m.remaining) : '待补充参数';
@@ -2558,6 +2860,12 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       case 'task-table-view': setTaskListView('table'); break;
       case 'task-cards-view': setTaskListView('cards'); break;
       case 'open-ai': openAI(); break;
+      case 'open-pku': openPKU(); break;
+      case 'pku-check': return runPKUOperation('status');
+      case 'pku-forget': return runPKUOperation('forget');
+      case 'pku-sms': return runPKUOperation('sms');
+      case 'pku-apply': applyPKUPlan(); break;
+      case 'pku-cancel': cancelPKURequest(); clearPKUPlan(); $('pku-status').textContent = '已取消读取。'; break;
       case 'apply-ai': applyAIPlan(); break;
       case 'cancel-ai': cancelAIRequest(); break;
       case 'clear-ai-key': cancelAIRequest(); clearAIPlan(); $('ai-api-key').value = ''; $('ai-status').textContent = '本页的 API Key 已清除。'; break;
@@ -2704,6 +3012,22 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     $('ai-api-key').value = '';
   });
   $('ai-dialog').addEventListener('close', cancelAIRequest);
+  $('pku-form').addEventListener('submit', event => runPKUOperation('sync', event));
+  $('pku-form').addEventListener('input', event => {
+    cancelPKURequest(); clearPKUPlan(); $('pku-error').textContent = '';
+    if (event.target.name === 'remember') pkuRememberTouched = true;
+    if (event.target.name === 'pairing') { pkuRememberKnown = false; pkuRememberKey = event.target.value.trim(); }
+    if (['username', 'password', 'pairing'].includes(event.target.name)) clearPKUVerification();
+  });
+  $('pku-remember').addEventListener('change', () => { pkuRememberTouched = true; });
+  $('pku-item-list').addEventListener('change', event => {
+    if (event.target.dataset.pkuIndex !== undefined) $('pku-select-' + event.target.dataset.pkuIndex).checked = !!event.target.value;
+  });
+  $('pku-dialog').addEventListener('close', () => {
+    cancelPKURequest(); clearPKUPlan(); clearPKUVerification(); $('pku-password').value = ''; $('pku-username').value = '';
+    pkuRememberKnown = false; pkuRememberTouched = false;
+    $('pku-error').textContent = ''; $('pku-status').textContent = '';
+  });
   $('settings-form').addEventListener('input', event => {
     if (!event.target.id.startsWith('weight-')) return; updateWeightLabels();
     const next = JSON.parse(JSON.stringify(state)); ['importance', 'urgency', 'enjoyment'].forEach(key => { next.settings.weights[key] = Number($('weight-' + key).value); });

@@ -5,7 +5,7 @@ const path = require('node:path');
 const AI = require('./dist/ai.js');
 const DIST = path.join(__dirname, 'dist');
 const MAX_BODY = 1024 * 1024;
-const STATIC = new Set(['index.html', 'styles.css', 'planner.js', 'data.js', 'imports.js', 'app.js', 'ai.js']);
+const STATIC = new Set(['index.html', 'styles.css', 'planner.js', 'data.js', 'imports.js', 'app.js', 'ai.js', 'pku.js']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
 function send(res, status, text, type = 'application/json; charset=utf-8') {
   if (res.destroyed || res.writableEnded) return;
