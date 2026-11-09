@@ -654,6 +654,12 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
 .pku-candidates strong { font-weight: 500; color: var(--ink); }
 .pku-candidates span { color: var(--muted); font-size: 11px; margin-top: 2px; }
 .pku-other-button { margin-left: 26px; }
+.pku-announcement { margin: 13px 0 0 26px; padding: 14px; border: 1px solid var(--purple-line); background: var(--purple-soft); border-radius: 6px; }
+.pku-ann-excerpt { margin: 12px 0; padding: 0 0 0 12px; border-left: 2px solid var(--purple); color: var(--muted); font-size: 12px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pku-ann-note { margin: 9px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.pku-ann-source { display: inline-block; color: var(--green); font-size: 12px; margin: 4px 0 12px; text-decoration: underline; text-underline-offset: 3px; }
+.pku-ann-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pku-ann-fields > label:first-child { grid-column: 1 / -1; }
 .pku-manual-picker { padding: 17px; margin: 17px 0; border: 1px solid var(--purple-line); background: var(--purple-soft); border-radius: 6px; }
 .pku-manual-picker h4 { margin: 0 0 8px; font-size: 15px; }
 .pku-manual-picker label { margin: 13px 0; }
@@ -664,7 +670,8 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .pku-request-actions > .danger-text { flex-basis: 100%; justify-content: flex-start; }
   .pku-request-actions > .button { flex: 1; min-width: 0; padding-inline: 11px; }
   .pku-item { padding: 13px 12px; }
-  .pku-item-date, .pku-match-label, .pku-candidates, .pku-other-button { margin-left: 0; }
+  .pku-item-date, .pku-match-label, .pku-candidates, .pku-other-button, .pku-announcement { margin-left: 0; }
+  .pku-ann-fields { grid-template-columns: 1fr; }
 }
 
   </style>
@@ -751,6 +758,8 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       <label>连接器配对码<small>仅本次页面使用</small><input id="pku-pairing" name="pairing" type="password" autocomplete="off" spellcheck="false" maxlength="128" required></label>
       <div class="form-grid"><label>校园卡账号<small>已记住登录时可留空</small><input id="pku-username" name="username" type="text" autocomplete="off" spellcheck="false" maxlength="100"></label><label>密码<input id="pku-password" name="password" type="password" autocomplete="off" maxlength="1000"></label></div>
       <label class="flag-option"><input id="pku-remember" name="remember" type="checkbox">在这台电脑上加密记住登录</label>
+      <label class="flag-option"><input id="pku-announcements" name="includeAnnouncements" type="checkbox" checked>同时识别公告中的 DDL</label>
+      <p class="muted small">公告在本机识别，不调用 AI；原文和识别提示用于本次核对。请确认标题与日期后，勾选需要导入的公告。</p>
       <p class="muted small">登录信息由本机连接器交给北大统一认证；记住登录使用 Windows 当前用户加密，保存在本机应用数据目录。任务备份与 AI 指令仅包含任务资料。</p>
       <section id="pku-verification" class="pku-verification" hidden aria-label="统一认证二次验证">
         <p id="pku-verification-message" class="muted small">请完成北大统一认证要求的验证，再次点击“读取 DDL”。</p>
@@ -2122,7 +2131,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   function findCandidates(item, index) {
     if (!index.forms.has(item.course)) index.forms.set(item.course, courseForms(item.course));
     const remote = titleProfile(item.title), displayed = titleProfile(item.displayTitle), forms = index.forms.get(item.course), remoteCore = stripCourse(remote.canonical, forms).core;
-    const remoteActivity = activity(remoteCore), remoteNumbers = numbers(remoteCore), remoteTopic = topic(remoteCore), dueDay = Date.parse(item.due.slice(0, 10) + 'T00:00:00Z'), pool = new Map();
+    const remoteActivity = activity(remoteCore), remoteNumbers = numbers(remoteCore), remoteTopic = topic(remoteCore), dueDay = item.due ? Date.parse(item.due.slice(0, 10) + 'T00:00:00Z') : null, pool = new Map();
     function include(values) { for (const value of values || []) pool.set(value.task.id, value); }
     include(index.exact.get(remote.exact)); include(index.exact.get(displayed.exact));
     include(index.canonical.get(remote.canonical)); include(index.canonical.get(displayed.canonical));
@@ -2136,7 +2145,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     const result = [];
     for (const profile of pool.values()) {
       if (!profile.courseCache.has(courseKey)) { const stripped = stripCourse(profile.canonical, forms); profile.courseCache.set(courseKey, { ...stripped, activity: activity(stripped.core), numbers: numbers(stripped.core), topic: topic(stripped.core) }); }
-      const stripped = profile.courseCache.get(courseKey), local = stripped.core, localActivity = stripped.activity, localNumbers = stripped.numbers, localTopic = stripped.topic, distance = profile.dueDay === null ? null : Math.abs(profile.dueDay - dueDay) / 86400000;
+      const stripped = profile.courseCache.get(courseKey), local = stripped.core, localActivity = stripped.activity, localNumbers = stripped.numbers, localTopic = stripped.topic, distance = profile.dueDay === null || dueDay === null ? null : Math.abs(profile.dueDay - dueDay) / 86400000;
       if ((remoteActivity === 'lab' || localActivity === 'lab') && remoteActivity !== localActivity || (remoteActivity === 'exam' || localActivity === 'exam') && remoteActivity !== localActivity) continue;
       const exact = profile.exact === remote.exact || profile.exact === displayed.exact;
       if (!exact && remoteNumbers && localNumbers && remoteNumbers !== localNumbers) continue;
@@ -2162,17 +2171,36 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     const [year, month, day] = value.slice(0, 10).split('-').map(Number), date = new Date(year, month - 1, day, 12);
     return year >= 1900 && year <= 2200 && date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
   }
+  function validAnnouncementUrl(value) {
+    const match = /^https:\/\/course\.pku\.edu\.cn\/webapps\/blackboard\/execute\/announcement\?([^#]+)$/.exec(value);
+    if (!match) return false;
+    const params = Object.create(null);
+    try {
+      for (const pair of match[1].split('&')) {
+        const split = pair.indexOf('='); if (split < 1) return false;
+        const key = decodeURIComponent(pair.slice(0, split)), content = decodeURIComponent(pair.slice(split + 1));
+        if (!['method', 'context', 'course_id'].includes(key) || own(params, key)) return false;
+        params[key] = content;
+      }
+    } catch { return false; }
+    return Object.keys(params).length === 3 && params.method === 'search' && params.context === 'course_entry' && /^_[A-Za-z0-9]+_\d+$/.test(params.course_id);
+  }
   function normalizeItems(input) {
     if (!Array.isArray(input) || input.length > 5000) throw new Error('教学网返回的事项数量无效，请缩小同步范围。');
     const seen = new Set();
     return input.map(item => {
       if (!plain(item) || typeof item.sourceId !== 'string' || !/^[A-Za-z0-9:_-]{1,96}$/.test(item.sourceId) || seen.has(item.sourceId)) throw new Error('教学网事项的来源标识无效或重复。');
       seen.add(item.sourceId);
-      if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 200 || typeof item.course !== 'string' || item.course.length > 200 || !validDue(item.due)) throw new Error('教学网事项的名称、课程或截止时间无效。');
+      const announcement = item.sourceKind === 'announcement';
+      if (item.sourceKind !== undefined && !announcement) throw new Error('教学网事项来源类型无效。');
+      if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 200 || typeof item.course !== 'string' || item.course.length > 200 || !(validDue(item.due) || announcement && item.due === '')) throw new Error('教学网事项的名称、课程或截止时间无效。');
       if (typeof item.sourceUrl !== 'string' || item.sourceUrl.length > 2000 || !/^https:\/\/course\.pku\.edu\.cn\/(?!\/)[^\s<>"\\]*$/.test(item.sourceUrl)) throw new Error('教学网事项来源地址无效。');
+      if (announcement && !validAnnouncementUrl(item.sourceUrl)) throw new Error('公告来源必须是教学网的只读公告页面。');
+      if (announcement && (item.excerpt !== undefined && (typeof item.excerpt !== 'string' || item.excerpt.length > 1200) || item.dateNote !== undefined && (typeof item.dateNote !== 'string' || item.dateNote.length > 200))) throw new Error('公告原文片段或日期提示无效。');
       const title = item.title.trim(), course = item.course.trim();
       return { sourceId: item.sourceId, title, course, due: item.due, sourceUrl: item.sourceUrl,
-        displayTitle: (course ? '【' + course + '】' : '') + title };
+        displayTitle: (course ? '【' + course + '】' : '') + title,
+        ...(announcement ? { sourceKind: 'announcement', excerpt: item.excerpt || '', dateNote: item.dateNote || '' } : {}) };
     });
   }
   function createPlan(state, input) {
@@ -2192,6 +2220,13 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     }
     return { ok: true, errors: [], baseTasks: JSON.stringify(state.tasks), rows, linkableTasks: linkable.map(taskChoice) };
   }
+  function reviseAnnouncement(state, plan, sourceId, changes) {
+    if (!plan || !plan.ok || plan.baseTasks !== JSON.stringify(state.tasks)) return fail('任务已有更新，请重新读取 DDL 后再核对公告。');
+    const row = plan.rows.find(entry => entry.item.sourceId === sourceId);
+    if (!row || row.item.sourceKind !== 'announcement' || !plain(changes) || Object.keys(changes).some(key => !['title', 'due'].includes(key))) return fail('公告编辑无效。');
+    const edited = createPlan(state, [{ ...row.item, ...changes }]); if (!edited.ok) return edited;
+    return { ...plan, rows: plan.rows.map(entry => entry === row ? edited.rows[0] : entry) };
+  }
   function applyPlan(state, plan, selections) {
     if (!plan || !plan.ok || !Array.isArray(plan.rows) || plan.baseTasks !== JSON.stringify(state.tasks)) return fail('任务已有更新，请重新读取 DDL 后再合并。');
     if (!Array.isArray(selections) || selections.length > plan.rows.length) return fail('同步选择无效。');
@@ -2201,6 +2236,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       if (!plain(choice) || typeof choice.sourceId !== 'string' || sources.has(choice.sourceId) || !(choice.targetId === null || typeof choice.targetId === 'string')) return fail('同步选择无效或重复。');
       sources.add(choice.sourceId);
       const row = plan.rows.find(entry => entry.item.sourceId === choice.sourceId); if (!row) return fail('所选教学网事项已失效，请重新读取。');
+      if (row.item.sourceKind === 'announcement' && !validDue(row.item.due)) return fail('所选公告尚未填写有效的截止日期，请补充后确认。');
       const group = 'pku:' + row.item.sourceId;
       let task;
       if (row.taskId) {
@@ -2254,7 +2290,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     }
     return value;
   }
-  return { ENDPOINT, createPlan, applyPlan, normalizeItems, normalizeChallenge, request };
+  return { ENDPOINT, createPlan, reviseAnnouncement, applyPlan, normalizeItems, normalizeChallenge, request };
 });
 
 </script>
@@ -2860,16 +2896,54 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       form.elements.remember.checked = result.remembered; pkuRememberKnown = true;
     } else pkuRememberKnown = pkuRememberTouched;
   }
+  function pkuRowLabel(row) {
+    const label = row.type === 'unchanged' ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : row.candidates.length ? '发现疑似重复，请核对' : '待新增，也可手动关联';
+    return row.item.sourceKind === 'announcement' ? '公告候选 · ' + label : label;
+  }
+  function pkuRowDate(row) { return (row.type === 'update' ? (row.beforeDue.replace('T', ' ') || '未设 DDL') + ' → ' : '') + (row.item.due.replace('T', ' ') || '请补充截止日期'); }
+  function pkuCandidateMarkup(row) {
+    return row.candidates.length ? '<ul class="pku-candidates">' + row.candidates.map(task => '<li><strong>' + esc(pkuChoiceLabel(task)) + '</strong><span>' + esc(task.reason) + '</span></li>').join('') + '</ul>' : '';
+  }
+  function pkuAnnouncementMarkup(row, index) {
+    if (row.item.sourceKind !== 'announcement') return '';
+    return '<section class="pku-announcement"><span class="tag">公告 · 请确认后勾选</span>' +
+      (row.item.excerpt ? '<blockquote class="pku-ann-excerpt">' + esc(row.item.excerpt) + '</blockquote>' : '') +
+      (row.item.dateNote ? '<p class="pku-ann-note">' + esc(row.item.dateNote) + '</p>' : '') +
+      '<a class="pku-ann-source" href="' + esc(row.item.sourceUrl) + '" target="_blank" rel="noopener noreferrer">查看公告原文</a>' +
+      '<div class="pku-ann-fields"><label>任务标题<input id="pku-ann-title-' + index + '" type="text" maxlength="200" value="' + esc(row.item.title) + '" data-pku-ann-index="' + index + '" autocomplete="off"></label><label>截止日期<input id="pku-ann-date-' + index + '" type="date" min="1900-01-01" max="2200-12-31" value="' + esc(row.item.due.slice(0, 10)) + '" data-pku-ann-index="' + index + '"></label><label>截止时刻<small>可留空</small><input id="pku-ann-time-' + index + '" type="time" value="' + esc(row.item.due.length > 10 ? row.item.due.slice(11) : '') + '" data-pku-ann-index="' + index + '"></label></div>' +
+      (row.taskId ? '<p class="muted small">来源已关联已有任务，确认后只更新原任务的 DDL。</p>' : '') +
+      '<p id="pku-ann-error-' + index + '" class="form-error" role="status"></p></section>';
+  }
+  function refreshPKUAnnouncement(index, report) {
+    if (!pkuPending || !Number.isInteger(index) || !pkuPending.plan.rows[index] || pkuPending.plan.rows[index].item.sourceKind !== 'announcement') return false;
+    const before = pkuPending.plan.rows[index], title = $('pku-ann-title-' + index), date = $('pku-ann-date-' + index), time = $('pku-ann-time-' + index);
+    const problem = !title.value.trim() ? '请补充公告要生成的任务标题。' : [date, time].some(control => control.validity && control.validity.badInput) ? '请填写有效的截止日期和时刻。' : '';
+    if (problem) { $('pku-ann-error-' + index).textContent = problem; if (report) $('pku-error').textContent = problem; return false; }
+    const due = date.value ? date.value + (time.value ? 'T' + time.value : '') : '';
+    const updated = K.reviseAnnouncement(state, pkuPending.plan, before.item.sourceId, { title: title.value.trim(), due });
+    if (!updated.ok) { const message = updated.errors.join(' '); $('pku-ann-error-' + index).textContent = message; if (report) $('pku-error').textContent = message; return false; }
+    pkuPending.plan = updated; const row = updated.rows[index];
+    $('pku-item-title-' + index).textContent = row.item.displayTitle; $('pku-row-label-' + index).textContent = pkuRowLabel(row);
+    $('pku-row-date-' + index).textContent = pkuRowDate(row); $('pku-candidate-area-' + index).innerHTML = pkuCandidateMarkup(row);
+    if (!row.taskId) {
+      const select = $('pku-target-' + index), choice = select.value;
+      const manual = choice.startsWith('task:') ? updated.linkableTasks.find(task => task.id === choice.slice(5)) : null;
+      select.innerHTML = pkuRowOptions(row, manual); select.value = choice;
+    }
+    $('pku-ann-error-' + index).textContent = due ? '' : '补充截止日期后可勾选导入。';
+    if (report && !due) { $('pku-error').textContent = '所选公告尚未填写截止日期，请补充后确认。'; return false; }
+    if (report) $('pku-error').textContent = '';
+    return true;
+  }
   function renderPKUPlan(plan) {
     $('pku-item-list').innerHTML = plan.rows.map((row, index) => {
-      const unchanged = row.type === 'unchanged', candidates = row.candidates.length > 0;
-      const label = unchanged ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : candidates ? '发现疑似重复，请核对' : '待新增，也可手动关联';
-      return '<article class="pku-item"><label class="pku-item-heading"><input id="pku-select-' + index + '" type="checkbox"' + (unchanged ? ' disabled' : !candidates ? ' checked' : '') + '><span><strong>' + esc(row.item.displayTitle) + '</strong><small>' + esc(label) + '</small></span></label>' +
-        '<p class="pku-item-date">' + (row.type === 'update' ? esc(row.beforeDue.replace('T', ' ') || '未设 DDL') + ' → ' : '') + esc(row.item.due.replace('T', ' ')) + '</p>' +
-        (candidates ? '<ul class="pku-candidates">' + row.candidates.map(task => '<li><strong>' + esc(pkuChoiceLabel(task)) + '</strong><span>' + esc(task.reason) + '</span></li>').join('') + '</ul>' : '') +
+      const unchanged = row.type === 'unchanged', candidates = row.candidates.length > 0, announcement = row.item.sourceKind === 'announcement';
+      return '<article class="pku-item"><label class="pku-item-heading"><input id="pku-select-' + index + '" type="checkbox"' + (!announcement && unchanged ? ' disabled' : !announcement && !candidates ? ' checked' : '') + '><span><strong id="pku-item-title-' + index + '">' + esc(row.item.displayTitle) + '</strong><small id="pku-row-label-' + index + '">' + esc(pkuRowLabel(row)) + '</small></span></label>' +
+        '<p id="pku-row-date-' + index + '" class="pku-item-date">' + esc(pkuRowDate(row)) + '</p>' + pkuAnnouncementMarkup(row, index) +
+        '<div id="pku-candidate-area-' + index + '">' + pkuCandidateMarkup(row) + '</div>' +
         (!row.taskId ? '<label class="pku-match-label" for="pku-target-' + index + '">处理方式<select id="pku-target-' + index + '" data-pku-index="' + index + '">' + pkuRowOptions(row) + '</select></label><button type="button" class="text-button pku-other-button" id="pku-other-' + index + '" data-action="pku-other" data-index="' + index + '">关联其他已有任务</button>' : '') + '</article>';
     }).join('');
-    const changed = plan.rows.filter(row => row.type !== 'unchanged').length;
+    const changed = plan.rows.filter(row => row.type !== 'unchanged' || row.item.sourceKind === 'announcement').length;
     $('pku-summary').textContent = '读取到 ' + plan.rows.length + ' 件事项，其中 ' + changed + ' 件可新增、关联或更新。';
     $('pku-preview').hidden = false; $('pku-apply').disabled = !changed;
   }
@@ -2894,7 +2968,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
           if (version !== pkuRequestVersion) return;
           acceptPKUStatus(status, form);
         }
-        options.path = '/api/pku/sync'; options.method = 'POST'; options.body = { remember: form.elements.remember.checked };
+        options.path = '/api/pku/sync'; options.method = 'POST'; options.body = { remember: form.elements.remember.checked, includeAnnouncements: form.elements.includeAnnouncements.checked };
         if (username) Object.assign(options.body, { username, password, remember: form.elements.remember.checked });
         if (pkuChallenge) {
           const verification = {};
@@ -2943,7 +3017,8 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     } else {
       const selections = [];
       for (let index = 0; index < pkuPending.plan.rows.length; index++) {
-        const row = pkuPending.plan.rows[index]; if (!$('pku-select-' + index).checked || row.type === 'unchanged') continue;
+        let row = pkuPending.plan.rows[index]; if (!$('pku-select-' + index).checked || row.type === 'unchanged' && row.item.sourceKind !== 'announcement') continue;
+        if (row.item.sourceKind === 'announcement') { if (!refreshPKUAnnouncement(index, true)) return; row = pkuPending.plan.rows[index]; }
         let targetId = row.taskId || null;
         if (!row.taskId) {
           const choice = $('pku-target-' + index).value;
@@ -2960,6 +3035,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     const error = commit(checked.value, { forceTable: true });
     if (error) {
       pkuPending.appliedInMemory = JSON.stringify(state.tasks) === JSON.stringify(checked.value.tasks); pkuPending.plan.baseTasks = JSON.stringify(state.tasks);
+      if (pkuPending.appliedInMemory) pkuPending.plan.rows.forEach((row, index) => { if (row.item.sourceKind === 'announcement') ['title', 'date', 'time'].forEach(key => { $('pku-ann-' + key + '-' + index).disabled = true; }); });
       $('pku-error').textContent = error; $('pku-apply').textContent = pkuPending.appliedInMemory ? '重试保存' : '确认合并到任务'; return;
     }
     clearPKUPlan(); $('pku-error').textContent = ''; $('pku-status').textContent = '教学网事项已合并并保存在当前浏览器。';
@@ -3168,7 +3244,11 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   });
   $('pku-remember').addEventListener('change', () => { pkuRememberTouched = true; });
   $('pku-item-list').addEventListener('change', event => {
+    if (event.target.dataset.pkuAnnIndex !== undefined) { refreshPKUAnnouncement(Number(event.target.dataset.pkuAnnIndex), false); return; }
     if (event.target.dataset.pkuIndex !== undefined) $('pku-select-' + event.target.dataset.pkuIndex).checked = !!event.target.value;
+  });
+  $('pku-item-list').addEventListener('input', event => {
+    if (event.target.dataset.pkuAnnIndex !== undefined) refreshPKUAnnouncement(Number(event.target.dataset.pkuAnnIndex), false);
   });
   $('pku-target-search').addEventListener('input', renderPKUManualChoices);
   $('pku-dialog').addEventListener('close', () => {

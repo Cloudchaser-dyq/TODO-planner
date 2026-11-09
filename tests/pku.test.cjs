@@ -7,6 +7,7 @@ function item(extra = {}) { return { sourceId: 'a'.repeat(64), title: '课程作
 function state(extra = {}) { return D.validateState({ ...D.emptyState('2026-11-09'), ...extra }).value; }
 function task(extra = {}) { return { id: 'manual-task', title: '课程作业', category: '课业', kind: 'task', progress: 30, target: 70, totalMinutes: 120, importance: 5, enjoyment: 1, due: '2026-11-11', nextAction: '先完成前半部分', flagged: true, ...extra }; }
 function jsonResponse(value, status = 200) { return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(value) }; }
+function announcement(extra = {}) { return item({ sourceId: 'c'.repeat(64), title: '示例课程通知', course: 'DEMO', due: '', sourceKind: 'announcement', excerpt: 'preview-excerpt-only', dateNote: 'preview-date-note-only', sourceUrl: 'https://course.pku.edu.cn/webapps/blackboard/execute/announcement?method=search&context=course_entry&course_id=_DEMO_1', ...extra }); }
 
 test('PKU imports start at 0/100, use stable opaque sources and update only the DDL', () => {
   const base = state(), plan = K.createPlan(base, [item()]); assert.equal(plan.ok, true);
@@ -145,4 +146,50 @@ test('authentication challenges carry only validated verification UI data and er
   assert.equal(K.normalizeChallenge({ captchaRequired: true, mode: 'evil' }), null);
   assert.deepEqual(K.normalizeChallenge({ captchaRequired: true, mode: 'otp', captchaImage: 'data:image/svg+xml;base64,AAAA' }), { captchaRequired: true, mode: 'otp' });
   await assert.rejects(K.request({ key, path: '/api/pku/status', fetchImpl: async () => ({ ok: true, text: async () => '<html>login</html>' }) }), /响应无效/);
+});
+
+test('announcement items allow missing dates only for preview and accept only the read-only PKU announcement link', () => {
+  const base = state(), plan = K.createPlan(base, [announcement()]);
+  assert.equal(plan.ok, true); assert.equal(plan.rows[0].item.due, '');
+  assert.equal(K.createPlan(base, [item({ due: '' })]).ok, false, 'calendar entries still need valid DDLs');
+  assert.equal(K.applyPlan(base, plan, [{ sourceId: announcement().sourceId, targetId: null }]).ok, false);
+  for (const sourceUrl of [
+    'javascript:alert(1)',
+    'https://course.pku.edu.cn/webapps/calendar/viewMyCalendar',
+    'https://course.pku.edu.cn/webapps/blackboard/execute/announcement?method=delete&context=course_entry&course_id=_DEMO_1',
+    announcement().sourceUrl + '&redirect=https%3A%2F%2Fevil.example',
+    announcement().sourceUrl + '&method=delete',
+    announcement().sourceUrl.replace('course.pku.edu.cn', 'course.pku.edu.cn.evil.example')
+  ]) assert.equal(K.createPlan(base, [announcement({ sourceUrl })]).ok, false, sourceUrl);
+  assert.equal(K.createPlan(base, [announcement({ excerpt: 'x'.repeat(1201) })]).ok, false);
+  assert.equal(K.createPlan(base, [announcement({ dateNote: 'x'.repeat(201) })]).ok, false);
+  assert.equal(K.createPlan(base, [item({ sourceKind: 'unrecognized' })]).ok, false);
+});
+
+test('announcement confirmation can revise title and date, recompute suggestions and keep raw source text outside saved tasks', () => {
+  const existing = task({ title: '0408 DEMO第3次课后作业' }), base = state({ tasks: [existing] });
+  const plan = K.createPlan(base, [announcement()]); assert.deepEqual(plan.rows[0].candidates, []);
+  const edited = K.reviseAnnouncement(base, plan, announcement().sourceId, { title: 'Homework 03', due: '2026-11-12' });
+  assert.equal(edited.ok, true); assert.equal(edited.rows[0].item.sourceId, announcement().sourceId);
+  assert.equal(edited.rows[0].candidates[0].id, existing.id); assert.doesNotMatch(JSON.stringify(edited.rows[0].candidates), /NaN/);
+  const linked = K.applyPlan(base, edited, [{ sourceId: announcement().sourceId, targetId: existing.id }]);
+  assert.equal(linked.ok, true); assert.equal(linked.value.tasks.length, 1);
+  assert.deepEqual([linked.value.tasks[0].id, linked.value.tasks[0].title, linked.value.tasks[0].progress, linked.value.tasks[0].totalMinutes], [existing.id, existing.title, 30, 120]);
+  const created = K.applyPlan(state(), K.reviseAnnouncement(state(), K.createPlan(state(), [announcement()]), announcement().sourceId, { title: '整理示例课程专题', due: '2026-11-19T16:30' }), [{ sourceId: announcement().sourceId, targetId: null }]);
+  assert.equal(created.ok, true); assert.equal(created.value.tasks[0].title, '【DEMO】整理示例课程专题');
+  assert.equal(created.value.tasks[0].due, '2026-11-19T16:30');
+  assert.doesNotMatch(JSON.stringify(created.value), /preview-excerpt-only|preview-date-note-only|sourceKind|sourceUrl|excerpt|dateNote/);
+});
+
+test('announcement edits preserve stale-plan protection and stable bindings after local renaming', () => {
+  const bound = task({ sourceGroup: 'pku:' + announcement().sourceId, title: '本地保留的名称', progress: 60 }), base = state({ tasks: [bound] });
+  const plan = K.createPlan(base, [announcement({ due: '2026-11-20' })]);
+  const edited = K.reviseAnnouncement(base, plan, announcement().sourceId, { title: '另一种公告标题', due: '2026-11-21T10:00' });
+  assert.equal(edited.rows[0].taskId, bound.id);
+  const saved = K.applyPlan(base, edited, [{ sourceId: announcement().sourceId, targetId: bound.id }]);
+  assert.equal(saved.ok, true); assert.equal(saved.value.tasks[0].title, bound.title); assert.equal(saved.value.tasks[0].progress, 60);
+  assert.equal(K.reviseAnnouncement(saved.value, plan, announcement().sourceId, { title: '过期编辑' }).ok, false);
+  assert.equal(K.reviseAnnouncement(base, plan, announcement().sourceId, { sourceUrl: 'https://evil.example' }).ok, false);
+  assert.equal(K.reviseAnnouncement(base, plan, announcement().sourceId, { title: '' }).ok, false);
+  assert.equal(K.reviseAnnouncement(base, plan, announcement().sourceId, { due: '2026-02-30' }).ok, false);
 });

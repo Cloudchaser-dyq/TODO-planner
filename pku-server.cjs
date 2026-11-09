@@ -130,7 +130,7 @@ function createServer(options = {}) {
         if (active.remember) await vault.save({ username: active.username, password: active.password });
         else if (input.remember === false) await vault.clear();
         if (started !== generation || session !== active) { send(409, { error: '本次同步已取消。' }); return; }
-        const result = await active.client.readDeadlines(active.username);
+        const result = await active.client.readDeadlines(active.username, { includeAnnouncements: input.includeAnnouncements === true });
         if (started !== generation || session !== active) { send(409, { error: '本次同步已取消。' }); return; }
         // Strict projection prevents arbitrary upstream metadata (or credentials)
         // from crossing the loopback API boundary.
@@ -158,10 +158,11 @@ function createServer(options = {}) {
 function validInput(value, sms = false) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   if (sms) return Object.keys(value).length === 0;
-  if (Object.keys(value).some(k => !['username', 'password', 'remember', 'verification'].includes(k))) return false;
+  if (Object.keys(value).some(k => !['username', 'password', 'remember', 'verification', 'includeAnnouncements'].includes(k))) return false;
   if ((value.username !== undefined) !== (value.password !== undefined)) return false;
   if (value.username !== undefined && (typeof value.username !== 'string' || !/^[A-Za-z0-9@._-]{1,100}$/.test(value.username.trim()) || typeof value.password !== 'string' || !value.password || value.password.length > 1024 || /[\r\n\u0000]/.test(value.password))) return false;
   if (value.remember !== undefined && typeof value.remember !== 'boolean') return false;
+  if (value.includeAnnouncements !== undefined && typeof value.includeAnnouncements !== 'boolean') return false;
   if (value.verification !== undefined) {
     if (!value.verification || typeof value.verification !== 'object' || Array.isArray(value.verification)) return false;
     if (Object.keys(value.verification).some(k => !['captcha', 'sms', 'otp'].includes(k) || typeof value.verification[k] !== 'string' || !/^[A-Za-z0-9]{0,12}$/.test(value.verification[k]))) return false;
@@ -176,10 +177,17 @@ function safeChallenge(value) {
 function projectItems(items) {
   if (!Array.isArray(items) || items.length > 5000) throw new Error('invalid calendar items');
   return items.map(item => {
-    if (!item || !/^[a-f0-9]{64}$/.test(item.sourceId) || typeof item.title !== 'string' || !item.title.trim() || item.title.length > 200 || typeof item.course !== 'string' || item.course.length > 200 || typeof item.due !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(item.due)) throw new Error('invalid calendar item');
+    const announcement = item?.sourceKind === 'announcement';
+    if (!item || !/^[a-f0-9]{64}$/.test(item.sourceId) || typeof item.title !== 'string' || !item.title.trim() || item.title.length > 200 || typeof item.course !== 'string' || item.course.length > 200 || typeof item.due !== 'string' || !(announcement && item.due === '') && !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(item.due)) throw new Error('invalid calendar item');
     let url; try { url = new URL(item.sourceUrl); } catch { throw new Error('invalid calendar link'); }
     if (url.origin !== 'https://course.pku.edu.cn' || url.username || url.password || url.hash || Array.from(url.searchParams.keys()).some(key => /token|password|session|ticket/i.test(key))) throw new Error('invalid calendar link');
-    return { sourceId: item.sourceId, title: item.title, course: item.course, due: item.due, sourceUrl: url.href };
+    const projected = { sourceId: item.sourceId, title: item.title, course: item.course, due: item.due, sourceUrl: url.href };
+    if (announcement) {
+      if (url.pathname !== '/webapps/blackboard/execute/announcement' || url.searchParams.get('method') !== 'search' || url.searchParams.get('context') !== 'course_entry' || !url.searchParams.get('course_id') || Array.from(url.searchParams.keys()).some(key => !['method', 'context', 'course_id'].includes(key)) || Array.from(url.searchParams).length !== 3) throw new Error('invalid announcement link');
+      if (typeof item.excerpt !== 'string' || item.excerpt.length > 1200 || typeof item.dateNote !== 'string' || item.dateNote.length > 200) throw new Error('invalid announcement evidence');
+      Object.assign(projected, { sourceKind: 'announcement', excerpt: item.excerpt, dateNote: item.dateNote });
+    }
+    return projected;
   });
 }
 function readBody(req) {

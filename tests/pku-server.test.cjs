@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { once } = require('node:events');
-const { createServer } = require('../pku-server.cjs');
+const { createServer, projectItems } = require('../pku-server.cjs');
 const PAIR = 'a'.repeat(64);
 const ITEM = { sourceId: 'b'.repeat(64), title: '示例作业', course: '示例课程', due: '2026-11-18T23:59', sourceUrl: 'https://course.pku.edu.cn/webapps/calendar/viewPersonal' };
 function memoryVault() {
@@ -79,6 +79,22 @@ test('invalid JSON, oversized requests and unsupported credential fields never r
   assert.equal((await request(server, '/api/pku/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{bad' })).status, 400);
   assert.equal((await post(server, { username: 'u', password: 'x'.repeat(17000) })).status, 413);
   assert.equal(calls, 0);
+});
+
+test('announcement reads are explicitly requested and only preview evidence crosses the loopback boundary', async t => {
+  const announcement = { ...ITEM, sourceKind: 'announcement', due: '', sourceUrl: 'https://course.pku.edu.cn/webapps/blackboard/execute/announcement?method=search&context=course_entry&course_id=_123_1', excerpt: '请于下周提交示例报告。', dateNote: '请补充日期。' };
+  const seen = [];
+  const { server } = await setup(t, { createClient: () => mockClient({ readDeadlines: async (_username, options) => { seen.push(options); return { items: [{ ...announcement, rawHtml: 'private-page', cookie: 'private-cookie' }], warnings: [] }; } }) });
+  const first = await post(server, { username: 'sample-user', password: 'sample-password', includeAnnouncements: true });
+  assert.equal(first.status, 200); assert.deepEqual(first.json.items, [announcement]);
+  assert.deepEqual(seen[0], { includeAnnouncements: true }); assert.doesNotMatch(first.text, /private-page|private-cookie/);
+  await post(server); assert.deepEqual(seen[1], { includeAnnouncements: false });
+  assert.equal((await post(server, { includeAnnouncements: 'yes' })).status, 400);
+  for (const sourceUrl of [announcement.sourceUrl + '&token=private', announcement.sourceUrl.replace('method=search', 'method=delete'), announcement.sourceUrl.replace('course.pku.edu.cn', 'evil.example'), announcement.sourceUrl + '&course_id=_456_1']) {
+    assert.throws(() => projectItems([{ ...announcement, sourceUrl }]));
+  }
+  assert.throws(() => projectItems([{ ...ITEM, due: '' }]));
+  assert.throws(() => projectItems([{ ...announcement, excerpt: 'x'.repeat(1201) }]));
 });
 
 test('two-factor challenge keeps pending session in memory and sends SMS only on explicit request', async t => {

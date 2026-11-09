@@ -599,16 +599,54 @@
       form.elements.remember.checked = result.remembered; pkuRememberKnown = true;
     } else pkuRememberKnown = pkuRememberTouched;
   }
+  function pkuRowLabel(row) {
+    const label = row.type === 'unchanged' ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : row.candidates.length ? '发现疑似重复，请核对' : '待新增，也可手动关联';
+    return row.item.sourceKind === 'announcement' ? '公告候选 · ' + label : label;
+  }
+  function pkuRowDate(row) { return (row.type === 'update' ? (row.beforeDue.replace('T', ' ') || '未设 DDL') + ' → ' : '') + (row.item.due.replace('T', ' ') || '请补充截止日期'); }
+  function pkuCandidateMarkup(row) {
+    return row.candidates.length ? '<ul class="pku-candidates">' + row.candidates.map(task => '<li><strong>' + esc(pkuChoiceLabel(task)) + '</strong><span>' + esc(task.reason) + '</span></li>').join('') + '</ul>' : '';
+  }
+  function pkuAnnouncementMarkup(row, index) {
+    if (row.item.sourceKind !== 'announcement') return '';
+    return '<section class="pku-announcement"><span class="tag">公告 · 请确认后勾选</span>' +
+      (row.item.excerpt ? '<blockquote class="pku-ann-excerpt">' + esc(row.item.excerpt) + '</blockquote>' : '') +
+      (row.item.dateNote ? '<p class="pku-ann-note">' + esc(row.item.dateNote) + '</p>' : '') +
+      '<a class="pku-ann-source" href="' + esc(row.item.sourceUrl) + '" target="_blank" rel="noopener noreferrer">查看公告原文</a>' +
+      '<div class="pku-ann-fields"><label>任务标题<input id="pku-ann-title-' + index + '" type="text" maxlength="200" value="' + esc(row.item.title) + '" data-pku-ann-index="' + index + '" autocomplete="off"></label><label>截止日期<input id="pku-ann-date-' + index + '" type="date" min="1900-01-01" max="2200-12-31" value="' + esc(row.item.due.slice(0, 10)) + '" data-pku-ann-index="' + index + '"></label><label>截止时刻<small>可留空</small><input id="pku-ann-time-' + index + '" type="time" value="' + esc(row.item.due.length > 10 ? row.item.due.slice(11) : '') + '" data-pku-ann-index="' + index + '"></label></div>' +
+      (row.taskId ? '<p class="muted small">来源已关联已有任务，确认后只更新原任务的 DDL。</p>' : '') +
+      '<p id="pku-ann-error-' + index + '" class="form-error" role="status"></p></section>';
+  }
+  function refreshPKUAnnouncement(index, report) {
+    if (!pkuPending || !Number.isInteger(index) || !pkuPending.plan.rows[index] || pkuPending.plan.rows[index].item.sourceKind !== 'announcement') return false;
+    const before = pkuPending.plan.rows[index], title = $('pku-ann-title-' + index), date = $('pku-ann-date-' + index), time = $('pku-ann-time-' + index);
+    const problem = !title.value.trim() ? '请补充公告要生成的任务标题。' : [date, time].some(control => control.validity && control.validity.badInput) ? '请填写有效的截止日期和时刻。' : '';
+    if (problem) { $('pku-ann-error-' + index).textContent = problem; if (report) $('pku-error').textContent = problem; return false; }
+    const due = date.value ? date.value + (time.value ? 'T' + time.value : '') : '';
+    const updated = K.reviseAnnouncement(state, pkuPending.plan, before.item.sourceId, { title: title.value.trim(), due });
+    if (!updated.ok) { const message = updated.errors.join(' '); $('pku-ann-error-' + index).textContent = message; if (report) $('pku-error').textContent = message; return false; }
+    pkuPending.plan = updated; const row = updated.rows[index];
+    $('pku-item-title-' + index).textContent = row.item.displayTitle; $('pku-row-label-' + index).textContent = pkuRowLabel(row);
+    $('pku-row-date-' + index).textContent = pkuRowDate(row); $('pku-candidate-area-' + index).innerHTML = pkuCandidateMarkup(row);
+    if (!row.taskId) {
+      const select = $('pku-target-' + index), choice = select.value;
+      const manual = choice.startsWith('task:') ? updated.linkableTasks.find(task => task.id === choice.slice(5)) : null;
+      select.innerHTML = pkuRowOptions(row, manual); select.value = choice;
+    }
+    $('pku-ann-error-' + index).textContent = due ? '' : '补充截止日期后可勾选导入。';
+    if (report && !due) { $('pku-error').textContent = '所选公告尚未填写截止日期，请补充后确认。'; return false; }
+    if (report) $('pku-error').textContent = '';
+    return true;
+  }
   function renderPKUPlan(plan) {
     $('pku-item-list').innerHTML = plan.rows.map((row, index) => {
-      const unchanged = row.type === 'unchanged', candidates = row.candidates.length > 0;
-      const label = unchanged ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : candidates ? '发现疑似重复，请核对' : '待新增，也可手动关联';
-      return '<article class="pku-item"><label class="pku-item-heading"><input id="pku-select-' + index + '" type="checkbox"' + (unchanged ? ' disabled' : !candidates ? ' checked' : '') + '><span><strong>' + esc(row.item.displayTitle) + '</strong><small>' + esc(label) + '</small></span></label>' +
-        '<p class="pku-item-date">' + (row.type === 'update' ? esc(row.beforeDue.replace('T', ' ') || '未设 DDL') + ' → ' : '') + esc(row.item.due.replace('T', ' ')) + '</p>' +
-        (candidates ? '<ul class="pku-candidates">' + row.candidates.map(task => '<li><strong>' + esc(pkuChoiceLabel(task)) + '</strong><span>' + esc(task.reason) + '</span></li>').join('') + '</ul>' : '') +
+      const unchanged = row.type === 'unchanged', candidates = row.candidates.length > 0, announcement = row.item.sourceKind === 'announcement';
+      return '<article class="pku-item"><label class="pku-item-heading"><input id="pku-select-' + index + '" type="checkbox"' + (!announcement && unchanged ? ' disabled' : !announcement && !candidates ? ' checked' : '') + '><span><strong id="pku-item-title-' + index + '">' + esc(row.item.displayTitle) + '</strong><small id="pku-row-label-' + index + '">' + esc(pkuRowLabel(row)) + '</small></span></label>' +
+        '<p id="pku-row-date-' + index + '" class="pku-item-date">' + esc(pkuRowDate(row)) + '</p>' + pkuAnnouncementMarkup(row, index) +
+        '<div id="pku-candidate-area-' + index + '">' + pkuCandidateMarkup(row) + '</div>' +
         (!row.taskId ? '<label class="pku-match-label" for="pku-target-' + index + '">处理方式<select id="pku-target-' + index + '" data-pku-index="' + index + '">' + pkuRowOptions(row) + '</select></label><button type="button" class="text-button pku-other-button" id="pku-other-' + index + '" data-action="pku-other" data-index="' + index + '">关联其他已有任务</button>' : '') + '</article>';
     }).join('');
-    const changed = plan.rows.filter(row => row.type !== 'unchanged').length;
+    const changed = plan.rows.filter(row => row.type !== 'unchanged' || row.item.sourceKind === 'announcement').length;
     $('pku-summary').textContent = '读取到 ' + plan.rows.length + ' 件事项，其中 ' + changed + ' 件可新增、关联或更新。';
     $('pku-preview').hidden = false; $('pku-apply').disabled = !changed;
   }
@@ -633,7 +671,7 @@
           if (version !== pkuRequestVersion) return;
           acceptPKUStatus(status, form);
         }
-        options.path = '/api/pku/sync'; options.method = 'POST'; options.body = { remember: form.elements.remember.checked };
+        options.path = '/api/pku/sync'; options.method = 'POST'; options.body = { remember: form.elements.remember.checked, includeAnnouncements: form.elements.includeAnnouncements.checked };
         if (username) Object.assign(options.body, { username, password, remember: form.elements.remember.checked });
         if (pkuChallenge) {
           const verification = {};
@@ -682,7 +720,8 @@
     } else {
       const selections = [];
       for (let index = 0; index < pkuPending.plan.rows.length; index++) {
-        const row = pkuPending.plan.rows[index]; if (!$('pku-select-' + index).checked || row.type === 'unchanged') continue;
+        let row = pkuPending.plan.rows[index]; if (!$('pku-select-' + index).checked || row.type === 'unchanged' && row.item.sourceKind !== 'announcement') continue;
+        if (row.item.sourceKind === 'announcement') { if (!refreshPKUAnnouncement(index, true)) return; row = pkuPending.plan.rows[index]; }
         let targetId = row.taskId || null;
         if (!row.taskId) {
           const choice = $('pku-target-' + index).value;
@@ -699,6 +738,7 @@
     const error = commit(checked.value, { forceTable: true });
     if (error) {
       pkuPending.appliedInMemory = JSON.stringify(state.tasks) === JSON.stringify(checked.value.tasks); pkuPending.plan.baseTasks = JSON.stringify(state.tasks);
+      if (pkuPending.appliedInMemory) pkuPending.plan.rows.forEach((row, index) => { if (row.item.sourceKind === 'announcement') ['title', 'date', 'time'].forEach(key => { $('pku-ann-' + key + '-' + index).disabled = true; }); });
       $('pku-error').textContent = error; $('pku-apply').textContent = pkuPending.appliedInMemory ? '重试保存' : '确认合并到任务'; return;
     }
     clearPKUPlan(); $('pku-error').textContent = ''; $('pku-status').textContent = '教学网事项已合并并保存在当前浏览器。';
@@ -907,7 +947,11 @@
   });
   $('pku-remember').addEventListener('change', () => { pkuRememberTouched = true; });
   $('pku-item-list').addEventListener('change', event => {
+    if (event.target.dataset.pkuAnnIndex !== undefined) { refreshPKUAnnouncement(Number(event.target.dataset.pkuAnnIndex), false); return; }
     if (event.target.dataset.pkuIndex !== undefined) $('pku-select-' + event.target.dataset.pkuIndex).checked = !!event.target.value;
+  });
+  $('pku-item-list').addEventListener('input', event => {
+    if (event.target.dataset.pkuAnnIndex !== undefined) refreshPKUAnnouncement(Number(event.target.dataset.pkuAnnIndex), false);
   });
   $('pku-target-search').addEventListener('input', renderPKUManualChoices);
   $('pku-dialog').addEventListener('close', () => {

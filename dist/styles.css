@@ -644,6 +644,12 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
 .pku-candidates strong { font-weight: 500; color: var(--ink); }
 .pku-candidates span { color: var(--muted); font-size: 11px; margin-top: 2px; }
 .pku-other-button { margin-left: 26px; }
+.pku-announcement { margin: 13px 0 0 26px; padding: 14px; border: 1px solid var(--purple-line); background: var(--purple-soft); border-radius: 6px; }
+.pku-ann-excerpt { margin: 12px 0; padding: 0 0 0 12px; border-left: 2px solid var(--purple); color: var(--muted); font-size: 12px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pku-ann-note { margin: 9px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.pku-ann-source { display: inline-block; color: var(--green); font-size: 12px; margin: 4px 0 12px; text-decoration: underline; text-underline-offset: 3px; }
+.pku-ann-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pku-ann-fields > label:first-child { grid-column: 1 / -1; }
 .pku-manual-picker { padding: 17px; margin: 17px 0; border: 1px solid var(--purple-line); background: var(--purple-soft); border-radius: 6px; }
 .pku-manual-picker h4 { margin: 0 0 8px; font-size: 15px; }
 .pku-manual-picker label { margin: 13px 0; }
@@ -654,5 +660,6 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   .pku-request-actions > .danger-text { flex-basis: 100%; justify-content: flex-start; }
   .pku-request-actions > .button { flex: 1; min-width: 0; padding-inline: 11px; }
   .pku-item { padding: 13px 12px; }
-  .pku-item-date, .pku-match-label, .pku-candidates, .pku-other-button { margin-left: 0; }
+  .pku-item-date, .pku-match-label, .pku-candidates, .pku-other-button, .pku-announcement { margin-left: 0; }
+  .pku-ann-fields { grid-template-columns: 1fr; }
 }

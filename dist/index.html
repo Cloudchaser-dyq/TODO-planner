@@ -97,6 +97,8 @@
       <label>连接器配对码<small>仅本次页面使用</small><input id="pku-pairing" name="pairing" type="password" autocomplete="off" spellcheck="false" maxlength="128" required></label>
       <div class="form-grid"><label>校园卡账号<small>已记住登录时可留空</small><input id="pku-username" name="username" type="text" autocomplete="off" spellcheck="false" maxlength="100"></label><label>密码<input id="pku-password" name="password" type="password" autocomplete="off" maxlength="1000"></label></div>
       <label class="flag-option"><input id="pku-remember" name="remember" type="checkbox">在这台电脑上加密记住登录</label>
+      <label class="flag-option"><input id="pku-announcements" name="includeAnnouncements" type="checkbox" checked>同时识别公告中的 DDL</label>
+      <p class="muted small">公告在本机识别，不调用 AI；原文和识别提示用于本次核对。请确认标题与日期后，勾选需要导入的公告。</p>
       <p class="muted small">登录信息由本机连接器交给北大统一认证；记住登录使用 Windows 当前用户加密，保存在本机应用数据目录。任务备份与 AI 指令仅包含任务资料。</p>
       <section id="pku-verification" class="pku-verification" hidden aria-label="统一认证二次验证">
         <p id="pku-verification-message" class="muted small">请完成北大统一认证要求的验证，再次点击“读取 DDL”。</p>

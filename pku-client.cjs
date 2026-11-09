@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { parseAnnouncementPage, parseCurrentCourses } = require('./pku-announcement-page.cjs');
+const { extractDeadlines } = require('./pku-announcements.cjs');
 
 const COURSE = 'https://course.pku.edu.cn';
 const IAAA = 'https://iaaa.pku.edu.cn';
@@ -18,8 +20,7 @@ const LIMIT = 4 * 1024 * 1024;
 // https://iaaa.pku.edu.cn/iaaa/resources/javascript/OAuthLogin.js?_v=20251215
 // Calendar requests use Blackboard's explicit-calendar profile, so a user's
 // hidden/unchecked calendars do not silently disappear from synchronization.
-// The authenticated PKU calendar response must still be checked with a real
-// account; unsupported response shapes are errors, never an empty success.
+// Unsupported response shapes are errors, never an empty success.
 function publicError(code, message, challenge) {
   const error = new Error(message);
   error.code = code;
@@ -407,7 +408,62 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
     return { ok: true };
   }
 
-  async function readDeadlines(username) {
+  async function readAnnouncements(username) {
+    // Read-only course and announcement routes used by the PKU client pku3b:
+    // https://github.com/sshwy/pku3b/blob/master/src/api/blackboard.rs
+    // DOM structure: https://github.com/zhuozhiyongde/PKU-Art/blob/main/src/css/courseAnnouncement.css
+    const portal = await request(COURSE + '/webapps/portal/execute/tabs/tabAction?tab_tab_group_id=_1_1');
+    if (isLoginPage(portal) || parseRedirect(portal.text)) throw publicError('AUTH_FAILED', '教学网登录已失效，请重新登录。');
+    const listing = parseCurrentCourses(portal.text);
+    if (!listing.recognized) return { items: [], warnings: ['公告读取：尚未识别当前课程列表，日历 DDL 可正常导入。'] };
+    const courses = listing.courses.slice(0, 30), results = [];
+    let cursor = 0, pages = 0, rows = 0, failed = 0, skipped = 0;
+    const deadline = now() + 60000;
+    async function worker() {
+      while (cursor < courses.length && now() < deadline) {
+        checkOpen();
+        const course = courses[cursor++];
+        const source = new URL(COURSE + '/webapps/blackboard/execute/announcement');
+        source.search = new URLSearchParams({ method: 'search', context: 'course_entry', course_id: course.id }).toString();
+        const fetchUrl = new URL(source);
+        fetchUrl.searchParams.set('handle', 'announcements_entry'); fetchUrl.searchParams.set('mode', 'view');
+        try {
+          const response = await request(fetchUrl);
+          if (isLoginPage(response) || parseRedirect(response.text)) throw publicError('AUTH_FAILED', '教学网登录已失效，请重新登录。');
+          const page = parseAnnouncementPage(response.text);
+          if (!page.recognized) { failed++; continue; }
+          pages++; skipped += page.skipped;
+          for (const entry of page.items) {
+            rows++;
+            const candidates = extractDeadlines({ title: entry.title, body: entry.body, publishedAt: entry.publishedAt, now: now() });
+            if (candidates.length >= 30) skipped++;
+            // With no stable page ID, changed content becomes a new candidate
+            // for review instead of silently overwriting a different task.
+            const stable = entry.id || crypto.createHash('sha256').update(entry.title + '\0' + entry.body + '\0' + (entry.publishedAt || '')).digest('hex');
+            for (let i = 0; i < candidates.length; i++) {
+              const candidate = candidates[i];
+              const parsed = candidate.due ? parseDate(candidate.due) : null;
+              if (parsed && (parsed.epoch < now() - 30 * DAY || parsed.epoch > now() + 180 * DAY)) continue;
+              const sourceId = crypto.createHash('sha256').update(username + '\0announcement\0' + course.id + '\0' + stable + '\0' + (entry.publishedAt || '') + '\0' + candidate.excerpt + '\0' + candidate.due).digest('hex');
+              const title = candidates.length > 1 ? entry.title.slice(0, 175) + ' · 截止事项 ' + (i + 1) : entry.title;
+              if (results.length < 200) results.push({ sourceId, title, course: course.name, due: parsed?.due || '', sourceUrl: source.href,
+                sourceKind: 'announcement', excerpt: candidate.excerpt.slice(0, 1200), dateNote: candidate.dateNote.slice(0, 200) });
+              else skipped++;
+            }
+          }
+        } catch (error) {
+          if (error?.code === 'AUTH_FAILED' || closed) throw error;
+          failed++;
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(3, courses.length) }, worker));
+    const warnings = ['公告读取：已检查 ' + pages + ' 门课程当前页的 ' + rows + ' 条公告，识别到 ' + results.length + ' 条待确认截止事项。公告正文在本机识别；附件和后续分页需另行查看。'];
+    if (failed || skipped || listing.skipped || cursor < courses.length || listing.courses.length > courses.length) warnings.push('部分公告尚未读全或超出本次范围（页面 ' + failed + '，条目 ' + skipped + '，课程 ' + (listing.courses.length - cursor + listing.skipped) + '），请在教学网补充核对。');
+    return { items: results, warnings };
+  }
+
+  async function readDeadlines(username, { includeAnnouncements = false } = {}) {
     checkOpen();
     username = usernameChecked(username);
     if (authenticatedFor !== username) throw publicError('AUTH_FAILED', '请先登录教学网，再同步截止时间。');
@@ -505,6 +561,19 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
     if (unknownDates) warnings.push('有作业的截止时间或时区不明确，已跳过；请在教学网核对。');
     if (unknownItems) warnings.push('有作业的课程、稳定编号或标题无法识别，已跳过；请在教学网核对。');
     if (unknownCalendars || unknownTypes) warnings.push('教学网返回了尚未适配的日历类型，部分截止时间需在教学网核对。');
+    if (includeAnnouncements) {
+      try {
+        const announcements = await readAnnouncements(username);
+        for (const item of announcements.items) {
+          if (items.size >= 5000) { warnings.push('同步事项已达到本次上限，请分批核对。'); break; }
+          items.set(item.sourceId, item);
+        }
+        warnings.push(...announcements.warnings);
+      } catch (error) {
+        if (error?.code === 'AUTH_FAILED' || closed) throw error;
+        warnings.push('公告暂未读取成功，请稍后重试；本次日历 DDL 可正常导入。');
+      }
+    }
     if ((unknownDates || unknownItems || unknownCalendars || unknownTypes) && !items.size) {
       throw publicError('UNSUPPORTED', '教学网作业数据尚无法准确解析。格式诊断：日期异常 ' + unknownDates + '，编号异常 ' + unknownItems + '，日历类型异常 ' + unknownCalendars + '，事项类型异常 ' + unknownTypes + '；' + [...schemaHints].sort().slice(0, 8).join('，') + '。现有任务保持不变。');
     }

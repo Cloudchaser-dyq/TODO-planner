@@ -49,6 +49,8 @@ function fixture(options = {}) {
       { id: 'PERSONAL' }, { id: 'INSTITUTION' }, { id: 'DEMO.COURSE', name: '演示课程', selected: false }
     ] });
     if (url.pathname === '/webapps/calendar/calendarData/events') return json(options.events || [assignment]);
+    if (url.pathname === '/webapps/portal/execute/tabs/tabAction') return html(options.portal || '<div class="portlet"><span class="moduleTitle">当前课程</span><ul class="courseListing"><li><a href="/webapps/blackboard/execute/launcher?key=_123_1,demo">示例课程</a></li></ul></div>');
+    if (url.pathname === '/webapps/blackboard/execute/announcement') return html(options.announcements || '<ul id="announcementList"></ul>');
     throw new Error('unhandled mock request containing secret ' + PASSWORD);
   };
   const client = createClient({ fetchImpl, now: () => NOW, ...(options.clientOptions || {}) });
@@ -315,6 +317,47 @@ test('a valid empty events array succeeds, while the backend never mutates the r
   const { client, calls } = await loggedIn({ events: [] });
   assert.deepEqual(await client.readDeadlines(USER), { items: [], warnings: [] });
   assert.ok(calls.filter(c => c.url.origin === COURSE).every(c => c.method === 'GET'));
+  client.close();
+});
+
+test('announcement DDLs are opt-in local candidates with evidence and fixed read-only sources', async () => {
+  const announcements = '<ul id="announcementList"><li id="_demo_announcement"><h3>示例报告提交</h3><div class="details"><p>请于2026年11月12日18:30前提交报告。</p><script>private-script</script></div><div class="announcementInfo"><p>发布时间：2026年11月09日</p></div></li></ul>';
+  const { client, calls } = await loggedIn({ announcements });
+  const calendarOnly = await client.readDeadlines(USER);
+  assert.equal(calendarOnly.items.length, 1); assert.ok(!calls.some(c => c.url.pathname.includes('/execute/announcement')));
+  const result = await client.readDeadlines(USER, { includeAnnouncements: true });
+  const item = result.items.find(item => item.sourceKind === 'announcement');
+  assert.ok(item); assert.equal(item.due, '2026-11-12T18:30'); assert.match(item.excerpt, /提交报告/);
+  assert.doesNotMatch(JSON.stringify(result), /private-script|fake-token|bb-secret|demo-student/);
+  assert.equal(item.sourceUrl, COURSE + '/webapps/blackboard/execute/announcement?method=search&context=course_entry&course_id=_123_1');
+  assert.ok(calls.filter(c => c.url.origin === COURSE).every(c => c.method === 'GET'));
+  assert.ok(result.warnings.some(w => /公告读取.*1 门.*1 条公告/.test(w)));
+  const again = await client.readDeadlines(USER, { includeAnnouncements: true });
+  assert.equal(again.items.find(row => row.sourceKind === 'announcement').sourceId, item.sourceId);
+  client.close();
+});
+
+test('relative announcement dates without publication metadata stay blank for confirmation', async () => {
+  const { client } = await loggedIn({ announcements: '<ul id="announcementList"><li><h3>示例作业</h3><div class="details">请明天提交报告。</div></li></ul>' });
+  const result = await client.readDeadlines(USER, { includeAnnouncements: true });
+  const item = result.items.find(item => item.sourceKind === 'announcement');
+  assert.ok(item); assert.equal(item.due, ''); assert.ok(item.dateNote);
+  client.close();
+});
+
+test('unsupported announcement layouts warn while preserving valid calendar results', async () => {
+  for (const options of [{ portal: '<html>changed</html>' }, { announcements: '<html>changed</html>' }]) {
+    const { client } = await loggedIn(options);
+    const result = await client.readDeadlines(USER, { includeAnnouncements: true });
+    assert.equal(result.items.length, 1); assert.ok(result.warnings.some(w => /公告/.test(w)));
+    client.close();
+  }
+});
+
+test('announcement login expiry fails clearly and never follows body or attachment links', async () => {
+  const { client, calls } = await loggedIn({ intercept: c => c.url.pathname === '/webapps/blackboard/execute/announcement' ? html('<form id="user_name"></form>') : null });
+  await assert.rejects(client.readDeadlines(USER, { includeAnnouncements: true }), safeFailure('AUTH_FAILED'));
+  assert.ok(calls.every(c => [COURSE, IAAA].includes(c.url.origin)));
   client.close();
 });
 

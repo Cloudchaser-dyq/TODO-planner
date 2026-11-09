@@ -63,7 +63,7 @@
   function findCandidates(item, index) {
     if (!index.forms.has(item.course)) index.forms.set(item.course, courseForms(item.course));
     const remote = titleProfile(item.title), displayed = titleProfile(item.displayTitle), forms = index.forms.get(item.course), remoteCore = stripCourse(remote.canonical, forms).core;
-    const remoteActivity = activity(remoteCore), remoteNumbers = numbers(remoteCore), remoteTopic = topic(remoteCore), dueDay = Date.parse(item.due.slice(0, 10) + 'T00:00:00Z'), pool = new Map();
+    const remoteActivity = activity(remoteCore), remoteNumbers = numbers(remoteCore), remoteTopic = topic(remoteCore), dueDay = item.due ? Date.parse(item.due.slice(0, 10) + 'T00:00:00Z') : null, pool = new Map();
     function include(values) { for (const value of values || []) pool.set(value.task.id, value); }
     include(index.exact.get(remote.exact)); include(index.exact.get(displayed.exact));
     include(index.canonical.get(remote.canonical)); include(index.canonical.get(displayed.canonical));
@@ -77,7 +77,7 @@
     const result = [];
     for (const profile of pool.values()) {
       if (!profile.courseCache.has(courseKey)) { const stripped = stripCourse(profile.canonical, forms); profile.courseCache.set(courseKey, { ...stripped, activity: activity(stripped.core), numbers: numbers(stripped.core), topic: topic(stripped.core) }); }
-      const stripped = profile.courseCache.get(courseKey), local = stripped.core, localActivity = stripped.activity, localNumbers = stripped.numbers, localTopic = stripped.topic, distance = profile.dueDay === null ? null : Math.abs(profile.dueDay - dueDay) / 86400000;
+      const stripped = profile.courseCache.get(courseKey), local = stripped.core, localActivity = stripped.activity, localNumbers = stripped.numbers, localTopic = stripped.topic, distance = profile.dueDay === null || dueDay === null ? null : Math.abs(profile.dueDay - dueDay) / 86400000;
       if ((remoteActivity === 'lab' || localActivity === 'lab') && remoteActivity !== localActivity || (remoteActivity === 'exam' || localActivity === 'exam') && remoteActivity !== localActivity) continue;
       const exact = profile.exact === remote.exact || profile.exact === displayed.exact;
       if (!exact && remoteNumbers && localNumbers && remoteNumbers !== localNumbers) continue;
@@ -103,17 +103,36 @@
     const [year, month, day] = value.slice(0, 10).split('-').map(Number), date = new Date(year, month - 1, day, 12);
     return year >= 1900 && year <= 2200 && date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
   }
+  function validAnnouncementUrl(value) {
+    const match = /^https:\/\/course\.pku\.edu\.cn\/webapps\/blackboard\/execute\/announcement\?([^#]+)$/.exec(value);
+    if (!match) return false;
+    const params = Object.create(null);
+    try {
+      for (const pair of match[1].split('&')) {
+        const split = pair.indexOf('='); if (split < 1) return false;
+        const key = decodeURIComponent(pair.slice(0, split)), content = decodeURIComponent(pair.slice(split + 1));
+        if (!['method', 'context', 'course_id'].includes(key) || own(params, key)) return false;
+        params[key] = content;
+      }
+    } catch { return false; }
+    return Object.keys(params).length === 3 && params.method === 'search' && params.context === 'course_entry' && /^_[A-Za-z0-9]+_\d+$/.test(params.course_id);
+  }
   function normalizeItems(input) {
     if (!Array.isArray(input) || input.length > 5000) throw new Error('教学网返回的事项数量无效，请缩小同步范围。');
     const seen = new Set();
     return input.map(item => {
       if (!plain(item) || typeof item.sourceId !== 'string' || !/^[A-Za-z0-9:_-]{1,96}$/.test(item.sourceId) || seen.has(item.sourceId)) throw new Error('教学网事项的来源标识无效或重复。');
       seen.add(item.sourceId);
-      if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 200 || typeof item.course !== 'string' || item.course.length > 200 || !validDue(item.due)) throw new Error('教学网事项的名称、课程或截止时间无效。');
+      const announcement = item.sourceKind === 'announcement';
+      if (item.sourceKind !== undefined && !announcement) throw new Error('教学网事项来源类型无效。');
+      if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 200 || typeof item.course !== 'string' || item.course.length > 200 || !(validDue(item.due) || announcement && item.due === '')) throw new Error('教学网事项的名称、课程或截止时间无效。');
       if (typeof item.sourceUrl !== 'string' || item.sourceUrl.length > 2000 || !/^https:\/\/course\.pku\.edu\.cn\/(?!\/)[^\s<>"\\]*$/.test(item.sourceUrl)) throw new Error('教学网事项来源地址无效。');
+      if (announcement && !validAnnouncementUrl(item.sourceUrl)) throw new Error('公告来源必须是教学网的只读公告页面。');
+      if (announcement && (item.excerpt !== undefined && (typeof item.excerpt !== 'string' || item.excerpt.length > 1200) || item.dateNote !== undefined && (typeof item.dateNote !== 'string' || item.dateNote.length > 200))) throw new Error('公告原文片段或日期提示无效。');
       const title = item.title.trim(), course = item.course.trim();
       return { sourceId: item.sourceId, title, course, due: item.due, sourceUrl: item.sourceUrl,
-        displayTitle: (course ? '【' + course + '】' : '') + title };
+        displayTitle: (course ? '【' + course + '】' : '') + title,
+        ...(announcement ? { sourceKind: 'announcement', excerpt: item.excerpt || '', dateNote: item.dateNote || '' } : {}) };
     });
   }
   function createPlan(state, input) {
@@ -133,6 +152,13 @@
     }
     return { ok: true, errors: [], baseTasks: JSON.stringify(state.tasks), rows, linkableTasks: linkable.map(taskChoice) };
   }
+  function reviseAnnouncement(state, plan, sourceId, changes) {
+    if (!plan || !plan.ok || plan.baseTasks !== JSON.stringify(state.tasks)) return fail('任务已有更新，请重新读取 DDL 后再核对公告。');
+    const row = plan.rows.find(entry => entry.item.sourceId === sourceId);
+    if (!row || row.item.sourceKind !== 'announcement' || !plain(changes) || Object.keys(changes).some(key => !['title', 'due'].includes(key))) return fail('公告编辑无效。');
+    const edited = createPlan(state, [{ ...row.item, ...changes }]); if (!edited.ok) return edited;
+    return { ...plan, rows: plan.rows.map(entry => entry === row ? edited.rows[0] : entry) };
+  }
   function applyPlan(state, plan, selections) {
     if (!plan || !plan.ok || !Array.isArray(plan.rows) || plan.baseTasks !== JSON.stringify(state.tasks)) return fail('任务已有更新，请重新读取 DDL 后再合并。');
     if (!Array.isArray(selections) || selections.length > plan.rows.length) return fail('同步选择无效。');
@@ -142,6 +168,7 @@
       if (!plain(choice) || typeof choice.sourceId !== 'string' || sources.has(choice.sourceId) || !(choice.targetId === null || typeof choice.targetId === 'string')) return fail('同步选择无效或重复。');
       sources.add(choice.sourceId);
       const row = plan.rows.find(entry => entry.item.sourceId === choice.sourceId); if (!row) return fail('所选教学网事项已失效，请重新读取。');
+      if (row.item.sourceKind === 'announcement' && !validDue(row.item.due)) return fail('所选公告尚未填写有效的截止日期，请补充后确认。');
       const group = 'pku:' + row.item.sourceId;
       let task;
       if (row.taskId) {
@@ -195,5 +222,5 @@
     }
     return value;
   }
-  return { ENDPOINT, createPlan, applyPlan, normalizeItems, normalizeChallenge, request };
+  return { ENDPOINT, createPlan, reviseAnnouncement, applyPlan, normalizeItems, normalizeChallenge, request };
 });
