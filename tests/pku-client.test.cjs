@@ -64,13 +64,20 @@ function safeFailure(code) {
     ![PASSWORD, USER, 'fake-token', 'bb-secret', 'IAAA_TEST'].some(secret => error.message.includes(secret));
 }
 
-test('PKU login encrypts the password with the fetched RSA key and uses the HTTPS callback', async () => {
+test('PKU login preserves the registered callback identifier and exchanges tokens only over HTTPS', async () => {
   const { client, calls } = await loggedIn();
   const login = calls.find(c => c.url.pathname === '/iaaa/oauthlogin.do');
   const form = new URLSearchParams(login.body);
   assert.equal(form.get('appid'), 'blackboard');
   assert.equal(form.get('userName'), USER);
-  assert.equal(form.get('redirUrl'), COURSE + '/webapps/bb-sso-BBLEARN/execute/authValidate/campusLogin');
+  const registeredCallback = 'http://course.pku.edu.cn/webapps/bb-sso-BBLEARN/execute/authValidate/campusLogin';
+  assert.equal(form.get('redirUrl'), registeredCallback);
+  const entry = calls.find(c => c.url.pathname === '/iaaa/oauth.jsp');
+  assert.equal(entry.url.searchParams.get('redirectUrl'), registeredCallback);
+  assert.equal(login.headers['X-Requested-With'], 'XMLHttpRequest');
+  assert.equal(login.headers.Referer, entry.url.href);
+  assert.ok(calls.every(c => c.url.protocol === 'https:'));
+  assert.ok(calls.filter(c => c.url.origin === IAAA && c.url.pathname.endsWith('.do')).every(c => c.headers['X-Requested-With'] === 'XMLHttpRequest'));
   assert.equal(form.get('remTrustChk'), 'false');
   assert.ok(!login.body.includes(PASSWORD));
   // RSA_NO_PADDING lets the test inspect PKCS#1 v1.5 encoding on runtimes that
@@ -135,6 +142,52 @@ test('authentication failures and invalid key responses return fixed, secret-fre
   await assert.rejects(badKey.client.prepare(USER), safeFailure('UNSUPPORTED'));
   assert.ok(!badKey.calls.some(c => c.url.pathname.includes('oauthlogin')));
   badKey.client.close();
+});
+
+test('login diagnostics expose only bounded error codes and fixed account-state guidance', async () => {
+  for (const [result, expected] of [
+    [{ success: false, errors: { code: 'E01', msg: PASSWORD + USER } }, /E01/],
+    [{ success: false, errors: { code: 'E21', msg: '账号锁定 ' + USER + PASSWORD }, showCode: true }, /暂时限制登录（E21）/],
+    [{ success: false, errors: { code: 'E09', msg: USER + PASSWORD } }, /E09/],
+    [{ success: false, errors: { code: USER, msg: PASSWORD } }, /未提供标准错误码/],
+    [{ success: false, isFlag: true, errors: { code: 'E08', msg: PASSWORD } }, /密码安全状态（E08）/]
+  ]) {
+    const { client } = fixture({ loginResult: result });
+    await assert.rejects(client.login({ username: USER, password: PASSWORD }), error => {
+      assert.ok(safeFailure('AUTH_FAILED')(error)); assert.match(error.publicMessage, expected); return true;
+    });
+    client.close();
+  }
+});
+
+test('calendar schema diagnostics describe types without reporting account, titles, IDs or date values', async () => {
+  for (const options of [
+    { events: [{ ...assignment, end: PASSWORD, title: USER }] },
+    { events: [{ ...assignment, eventType: 'GradebookColumn', title: PASSWORD }] },
+    { calendars: { calendars: [{ id: USER, calendarType: PASSWORD }] } },
+    { events: [{ ...assignment, calendarId: USER, title: PASSWORD }] }
+  ]) {
+    const { client } = await loggedIn(options);
+    await assert.rejects(client.readDeadlines(USER), error => {
+      assert.ok(safeFailure('UNSUPPORTED')(error)); assert.match(error.publicMessage, /格式诊断/);
+      assert.doesNotMatch(error.publicMessage, /fake-calendar-event|2026-11/); return true;
+    });
+    client.close();
+  }
+});
+
+test('PKU localized 作业 entries are imported just like Assignment and other localized calendar entries stay excluded', async () => {
+  const { client } = await loggedIn({ events: [
+    { ...assignment, eventType: '作业' },
+    { ...assignment, id: 'demo-test', itemSourceId: '_200_1', eventType: '测试' },
+    { ...assignment, id: 'demo-event', itemSourceId: '_300_1', eventType: '事件' }
+  ] });
+  const result = await client.readDeadlines(USER);
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].title, '演示作业');
+  assert.equal(result.items[0].due, '2026-11-10T23:59');
+  assert.deepEqual(result.warnings, []);
+  client.close();
 });
 
 test('deadline reads require the same authenticated account', async () => {
@@ -216,10 +269,10 @@ test('personal events, meetings and tests are excluded from movable tasks', asyn
   client.close();
 });
 
-test('invalid dates, absent timezones and ambiguous all-day ends cannot produce a false empty success', async () => {
+test('invalid dates and ambiguous all-day ends cannot produce a false empty success', async () => {
   for (const event of [
     { ...assignment, end: '2026-02-30T15:59:00Z' },
-    { ...assignment, end: '2026-11-10T23:59:00' },
+    { ...assignment, end: '2026-11-10T23:59:00+25:00' },
     { ...assignment, allDay: true },
     { ...assignment, end: 1794326340 },
     { ...assignment, itemSourceId: '', id: '' }
@@ -228,6 +281,18 @@ test('invalid dates, absent timezones and ambiguous all-day ends cannot produce 
     await assert.rejects(client.readDeadlines(USER), safeFailure('UNSUPPORTED'));
     client.close();
   }
+});
+
+test('floating calendar times preserve Beijing wall time with a visible review notice', async () => {
+  const { client } = await loggedIn({ events: [
+    { ...assignment, id: 'demo-floating', itemSourceId: 'demo-floating', eventType: '作业', end: '2026-11-10T23:59:00.000' },
+    { ...assignment, id: 'demo-space', itemSourceId: 'demo-space', end: '2026-11-11 18:30:00' },
+    { ...assignment, id: 'demo-canonical', itemSourceId: 'demo-canonical', end: '2026-11-12T07:00:00', endDate: '2026-11-12T15:00:00+0800' }
+  ] });
+  const result = await client.readDeadlines(USER);
+  assert.deepEqual(result.items.map(item => item.due), ['2026-11-10T23:59', '2026-11-11T18:30', '2026-11-12T15:00']);
+  assert.equal(result.warnings.length, 1); assert.match(result.warnings[0], /未注明时区.*北京时间.*核对/);
+  client.close();
 });
 
 test('unknown calendar/event JSON shapes fail instead of being accepted as no deadlines', async () => {

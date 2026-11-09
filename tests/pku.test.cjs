@@ -61,6 +61,57 @@ test('date-only deadlines retain their precision without inventing a submission 
   assert.equal(result.ok, true); assert.equal(result.value.tasks[0].due, '2026-11-12'); assert.equal(result.value.tasks[0].duePrecision, 'date');
 });
 
+test('near-name candidates combine course, activity, sequence and DDL and expose the matching reason', () => {
+  const base = state({ tasks: [task({ title: '🔴0408 ＤＥＭＯ：第３次课后作业', due: '2026-11-12', progress: 100 })] });
+  const plan = K.createPlan(base, [item({ title: 'Homework 03', course: 'DEMO', due: '2026-11-12T23:59' })]);
+  assert.equal(plan.ok, true); assert.equal(plan.rows[0].taskId, '');
+  assert.equal(plan.rows[0].candidates.length, 1);
+  const candidate = plan.rows[0].candidates[0];
+  assert.equal(candidate.match, 'similar'); assert.match(candidate.reason, /课程.*编号一致/);
+  assert.deepEqual([candidate.title, candidate.due, candidate.progress, candidate.done], ['🔴0408 ＤＥＭＯ：第３次课后作业', '2026-11-12', 100, true]);
+  assert.equal(plan.baseTasks, JSON.stringify(base.tasks), 'a suggestion leaves current task data untouched');
+  const datePrefix = K.createPlan(state({ tasks: [task({ title: '0408 示例专题研究论文', due: '2026-11-12' })] }), [item({ title: '示例专题研究论文', course: '', due: '2026-11-12' })]);
+  assert.equal(datePrefix.rows[0].candidates.length, 1); assert.match(datePrefix.rows[0].candidates[0].reason, /日期前缀/);
+});
+
+test('generic task words, the same day or unconfirmed course aliases do not produce near-name candidates', () => {
+  for (const local of ['另一门课的课后作业', '普通作业', '今天的事情']) {
+    const plan = K.createPlan(state({ tasks: [task({ title: local, due: '2026-11-12' })] }), [item({ title: '作业', course: 'DEMO', due: '2026-11-12' })]);
+    assert.deepEqual(plan.rows[0].candidates, [], local);
+  }
+  const alias = K.createPlan(state({ tasks: [task({ title: 'DEMO作业3', due: '2026-11-12' })] }), [item({ title: 'Homework 3', course: '示例系统原理', due: '2026-11-12' })]);
+  assert.deepEqual(alias.rows[0].candidates, [], 'course abbreviation aliases are not guessed');
+  const weekly = K.createPlan(state({ tasks: [task({ title: '0405 DEMO 作业', due: '2026-11-05' })] }), [item({ title: 'Homework', course: 'DEMO', due: '2026-11-12' })]);
+  assert.deepEqual(weekly.rows[0].candidates, [], 'the same course and generic activity one week apart are separate');
+});
+
+test('near-name suggestions distinguish homework from LAB/exams and preserve multipart number boundaries', () => {
+  for (const local of ['DEMO LAB3', 'DEMO小测3', 'DEMO期中考试3', 'DEMO作业13', 'DEMO作业31', 'DEMO作业3-1']) {
+    const plan = K.createPlan(state({ tasks: [task({ title: local, due: '2026-11-12' })] }), [item({ title: 'Homework 3', course: 'DEMO', due: '2026-11-12' })]);
+    assert.deepEqual(plan.rows[0].candidates, [], local);
+  }
+  const multipart = K.createPlan(state({ tasks: [task({ title: 'DEMO作业31', due: '2026-11-12' })] }), [item({ title: 'Homework 3-1', course: 'DEMO', due: '2026-11-12' })]);
+  assert.deepEqual(multipart.rows[0].candidates, []);
+  const matched = K.createPlan(state({ tasks: [task({ title: 'DEMO实验3-1', due: '2026-11-12' })] }), [item({ title: 'Lab 3-1', course: 'DEMO', due: '2026-11-12' })]);
+  assert.equal(matched.rows[0].candidates.length, 1);
+});
+
+test('manual cross-name linking is available without suggestions and preserves completion, task IDs and work logs', () => {
+  const existing = task({ title: '我自己写的另一种名称', progress: 100, due: '2026-11-11' });
+  const log = { id: 'log-stable', taskId: existing.id, taskTitle: existing.title, date: '2026-11-09', at: '2026-11-09T03:00:00.000Z', minutes: 45, note: '自己的历史记录', fromProgress: 60, toProgress: 100, status: 'completed', startedAt: '', endedAt: '' };
+  const base = state({ tasks: [existing, task({ id: 'already-linked', title: '另一项', sourceGroup: 'pku:' + 'b'.repeat(64) }), task({ id: 'fixed-event', title: '固定考试', kind: 'event' })], logs: [log] });
+  const plan = K.createPlan(base, [item()]);
+  assert.deepEqual(plan.rows[0].candidates, []); assert.deepEqual(plan.linkableTasks.map(entry => entry.id), [existing.id]);
+  const linked = K.applyPlan(base, plan, [{ sourceId: item().sourceId, targetId: existing.id }]);
+  assert.equal(linked.ok, true); assert.equal(linked.value.tasks.length, base.tasks.length);
+  assert.deepEqual(linked.value.tasks[0], { ...base.tasks[0], due: item().due, duePrecision: 'time', sourceGroup: 'pku:' + item().sourceId });
+  assert.deepEqual(linked.value.logs, base.logs);
+  assert.equal(K.applyPlan(base, plan, [{ sourceId: item().sourceId, targetId: 'already-linked' }]).ok, false);
+  assert.equal(K.applyPlan(base, plan, [{ sourceId: item().sourceId, targetId: 'fixed-event' }]).ok, false);
+  const two = K.createPlan(base, [item(), item({ sourceId: 'c'.repeat(64) })]);
+  assert.equal(K.applyPlan(base, two, two.rows.map(row => ({ sourceId: row.item.sourceId, targetId: existing.id }))).ok, false);
+});
+
 test('only whitelisted item fields enter task state and unknown remote omissions never delete local tasks', () => {
   const base = state({ tasks: [task()] });
   const plan = K.createPlan(base, [item({ password: 'remote-private-password', cookie: 'remote-private-cookie' })]);

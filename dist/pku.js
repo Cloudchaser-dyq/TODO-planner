@@ -9,6 +9,95 @@
   const plain = value => !!value && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const cleanTitle = value => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
   const fail = message => ({ ok: false, errors: [message] });
+  function titleProfile(value) {
+    let text = value.normalize('NFKC').toLowerCase().trim().replace(/^[\s#*=~!！·•🔴\-–—]+/gu, '');
+    text = text.replace(/^(?:(?:19|20)\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?|\d{1,2}[-/.月]\d{1,2}日?|(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?:\s*[:：\-–—.)、]\s*|\s+|(?=[a-z\u3400-\u9fff【\[(]))/i, '');
+    const chinese = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+    text = text.replace(/第([一二三四五六七八九十]{1,3})(?=[次章节周题])/g, (all, digits) => {
+      if (digits.length === 1) return '第' + chinese[digits];
+      if (digits[0] === '十' && digits.length === 2) return '第' + (10 + chinese[digits[1]]);
+      if (digits[1] === '十') return '第' + (chinese[digits[0]] * 10 + (digits[2] ? chinese[digits[2]] : 0));
+      return all;
+    });
+    const canonical = text.replace(/home\s*work|assignment|\bhw(?=\d|\b)/g, '作业')
+      .replace(/laboratory|\blab(?=\d|\b)|实验/g, 'lab').replace(/quiz|exam|\btest(?=\d|\b)|考试|小测|测验/g, '考试')
+      .replace(/(\d)[^\p{L}\p{N}]+(?=\d)/gu, '$1|').replace(/[^\p{L}\p{N}|]/gu, '');
+    return { exact: cleanTitle(value), canonical };
+  }
+  function activity(text) {
+    if (/lab|上机/.test(text)) return 'lab';
+    if (/考试|期中|期末|测试/.test(text)) return 'exam';
+    if (/作业|习题|练习/.test(text)) return 'homework';
+    if (/论文|报告|paper|report/.test(text)) return 'paper';
+    return '';
+  }
+  function numbers(text) { return (text.match(/\d+/g) || []).map(value => value.replace(/^0+(?=\d)/, '')).join('|'); }
+  function topic(text) { return text.replace(/\d+|\||作业|习题|练习|考试|期中|期末|测试|lab|论文|报告|paper|report|课程|课后|课堂|本周|本次|书面|提交|完成|ddl|deadline|第|次|章节|章|周|题/g, ''); }
+  function meaningful(text) { return /[\u3400-\u9fff]{3}/.test(text) || /[a-z]{6}/.test(text); }
+  function grams(text) { const result = new Set(); for (let i = 1; i < text.length; i++) result.add(text.slice(i - 1, i + 1)); return result; }
+  function similarity(a, b) { const aa = grams(a), bb = grams(b); let count = 0; for (const token of aa) if (bb.has(token)) count++; return aa.size + bb.size ? 2 * count / (aa.size + bb.size) : 0; }
+  function courseForms(course) {
+    const fragments = [course, course.replace(/[（(【\[][\s\S]*?[）)】\]]/g, '')];
+    for (const match of course.matchAll(/[（(【\[]([^）)】\]]+)[）)】\]]/g)) fragments.push(match[1]);
+    for (const match of course.matchAll(/(?:^|[^A-Za-z0-9])([A-Z]{2,8}(?:[- ]?\d{1,4})?)(?=$|[^A-Za-z0-9])/g)) fragments.push(match[1]);
+    return Array.from(new Set(fragments.map(value => titleProfile(value).canonical).filter(value => value.length >= 2 && !/^\d+$/.test(value)))).sort((a, b) => b.length - a.length);
+  }
+  function stripCourse(text, forms) {
+    for (const form of forms) if (text.startsWith(form)) {
+      const rest = text.slice(form.length);
+      if (/^[a-z]+$/.test(form) && /^[a-z]/.test(rest) && !/^(?:lab|hw|homework|assignment|quiz|exam|paper|report)/.test(rest)) continue;
+      return { core: rest, course: true };
+    }
+    return { core: text, course: false };
+  }
+  function taskChoice(task) { return { id: task.id, title: task.title, due: task.due, progress: task.progress, done: task.done }; }
+  function createCandidateIndex(tasks) {
+    const profiles = tasks.map(task => ({ task, ...titleProfile(task.title), dueDay: task.due ? Date.parse(task.due.slice(0, 10) + 'T00:00:00Z') : null, courseCache: new Map() })), exact = new Map(), canonical = new Map(), topics = new Map(), courses = new Map(), forms = new Map();
+    function add(index, key, profile) { if (!index.has(key)) index.set(key, []); index.get(key).push(profile); }
+    for (const profile of profiles) {
+      add(exact, profile.exact, profile); add(canonical, profile.canonical, profile);
+      const content = topic(profile.canonical); if (meaningful(content)) for (const gram of grams(content)) add(topics, gram, profile);
+    }
+    return { profiles, exact, canonical, topics, courses, forms };
+  }
+  function findCandidates(item, index) {
+    if (!index.forms.has(item.course)) index.forms.set(item.course, courseForms(item.course));
+    const remote = titleProfile(item.title), displayed = titleProfile(item.displayTitle), forms = index.forms.get(item.course), remoteCore = stripCourse(remote.canonical, forms).core;
+    const remoteActivity = activity(remoteCore), remoteNumbers = numbers(remoteCore), remoteTopic = topic(remoteCore), dueDay = Date.parse(item.due.slice(0, 10) + 'T00:00:00Z'), pool = new Map();
+    function include(values) { for (const value of values || []) pool.set(value.task.id, value); }
+    include(index.exact.get(remote.exact)); include(index.exact.get(displayed.exact));
+    include(index.canonical.get(remote.canonical)); include(index.canonical.get(displayed.canonical));
+    const courseKey = JSON.stringify(forms);
+    if (!index.courses.has(courseKey)) index.courses.set(courseKey, forms.length ? index.profiles.filter(profile => stripCourse(profile.canonical, forms).course) : []);
+    include(index.courses.get(courseKey));
+    if (meaningful(remoteTopic)) {
+      const counts = new Map(); for (const gram of grams(remoteTopic)) for (const profile of index.topics.get(gram) || []) counts.set(profile, (counts.get(profile) || 0) + 1);
+      for (const [profile, count] of counts) if (count >= 2) pool.set(profile.task.id, profile);
+    }
+    const result = [];
+    for (const profile of pool.values()) {
+      if (!profile.courseCache.has(courseKey)) { const stripped = stripCourse(profile.canonical, forms); profile.courseCache.set(courseKey, { ...stripped, activity: activity(stripped.core), numbers: numbers(stripped.core), topic: topic(stripped.core) }); }
+      const stripped = profile.courseCache.get(courseKey), local = stripped.core, localActivity = stripped.activity, localNumbers = stripped.numbers, localTopic = stripped.topic, distance = profile.dueDay === null ? null : Math.abs(profile.dueDay - dueDay) / 86400000;
+      if ((remoteActivity === 'lab' || localActivity === 'lab') && remoteActivity !== localActivity || (remoteActivity === 'exam' || localActivity === 'exam') && remoteActivity !== localActivity) continue;
+      const exact = profile.exact === remote.exact || profile.exact === displayed.exact;
+      if (!exact && remoteNumbers && localNumbers && remoteNumbers !== localNumbers) continue;
+      let score = 0, reason = '';
+      if (exact) { score = 100; reason = '名称相同，请核对课程'; }
+      else if ((local === remoteCore || profile.canonical === remote.canonical || profile.canonical === displayed.canonical) && (meaningful(remoteTopic) || stripped.course && remoteNumbers && remoteNumbers === localNumbers) && (distance === null || distance <= 21)) {
+        score = 94; reason = '去除日期前缀、标点后名称一致';
+      } else if (stripped.course && remoteActivity && remoteActivity === localActivity && remoteNumbers && remoteNumbers === localNumbers && (distance === null || distance <= 14)) {
+        score = 88; reason = '课程、事项类型及编号一致';
+      } else if (stripped.course && remoteActivity && remoteActivity === localActivity && distance === 0 && (!remoteNumbers || !localNumbers)) {
+        score = 72; reason = '课程及事项类型相同、DDL 同日，需核对具体内容';
+      } else if (meaningful(remoteTopic) && meaningful(localTopic) && (distance === null || distance <= 7) && similarity(remoteTopic, localTopic) >= 0.82) {
+        score = 80; reason = '标题内容接近，请核对是否同一事项';
+      }
+      if (!score) continue;
+      if (distance !== null && !reason.includes('DDL')) reason += distance === 0 ? '；DDL 同日' : '；DDL 相差 ' + distance + ' 天';
+      result.push({ ...taskChoice(profile.task), match: exact ? 'exact' : 'similar', reason, score, distance });
+    }
+    return result.sort((a, b) => b.score - a.score || (a.distance === null ? Infinity : a.distance) - (b.distance === null ? Infinity : b.distance) || a.id.localeCompare(b.id)).slice(0, 6);
+  }
   function validDue(value) {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T(?:[01]\d|2[0-3]):[0-5]\d)?$/.test(value)) return false;
     const [year, month, day] = value.slice(0, 10).split('-').map(Number), date = new Date(year, month - 1, day, 12);
@@ -30,20 +119,19 @@
   function createPlan(state, input) {
     const checked = D.validateState(state); if (!checked.ok) return fail('当前任务数据无效，请先恢复本地数据。');
     let items; try { items = normalizeItems(input); } catch (error) { return fail(error.message); }
-    const tasks = checked.value.tasks;
+    const tasks = checked.value.tasks, linkable = tasks.filter(task => !D.isEvent(task) && !task.sourceGroup.startsWith('pku:'));
+    const candidateIndex = createCandidateIndex(linkable);
     const rows = [];
     for (const item of items) {
       const group = 'pku:' + item.sourceId, linked = tasks.filter(task => task.sourceGroup === group);
       if (linked.length > 1) return fail('多个本地任务关联到同一教学网事项，请先整理重复关联。');
       const task = linked[0];
       if (task && D.isEvent(task)) return fail('教学网作业已被改为固定事件，请先解除关联或恢复为任务。');
-      const titles = [item.title, item.displayTitle].map(cleanTitle);
-      const candidates = task ? [] : tasks.filter(candidate => !D.isEvent(candidate) && !candidate.sourceGroup.startsWith('pku:') && titles.includes(cleanTitle(candidate.title)))
-        .map(candidate => ({ id: candidate.id, title: candidate.title, due: candidate.due }));
+      const candidates = task ? [] : findCandidates(item, candidateIndex);
       rows.push({ item, taskId: task ? task.id : '', beforeDue: task ? task.due : '', candidates,
         type: task ? (task.due === item.due ? 'unchanged' : 'update') : 'create' });
     }
-    return { ok: true, errors: [], baseTasks: JSON.stringify(state.tasks), rows };
+    return { ok: true, errors: [], baseTasks: JSON.stringify(state.tasks), rows, linkableTasks: linkable.map(taskChoice) };
   }
   function applyPlan(state, plan, selections) {
     if (!plan || !plan.ok || !Array.isArray(plan.rows) || plan.baseTasks !== JSON.stringify(state.tasks)) return fail('任务已有更新，请重新读取 DDL 后再合并。');
@@ -60,7 +148,7 @@
         if (choice.targetId !== row.taskId) return fail('已关联事项应更新原任务。');
         task = next.tasks.find(entry => entry.id === row.taskId);
       } else if (choice.targetId !== null) {
-        if (!row.candidates.some(candidate => candidate.id === choice.targetId)) return fail('只能关联预览中列出的同名任务。');
+        if (!Array.isArray(plan.linkableTasks) || !plan.linkableTasks.some(candidate => candidate.id === choice.targetId)) return fail('只能关联当前预览中可手选的本地任务。');
         task = next.tasks.find(entry => entry.id === choice.targetId);
       }
       if (task) {

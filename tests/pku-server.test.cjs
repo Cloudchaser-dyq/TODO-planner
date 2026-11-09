@@ -145,7 +145,7 @@ test('forget while decrypting saved credentials prevents a late session from bei
   assert.deepEqual((await request(server)).json, { remembered: false, connected: false });
 });
 
-test('disconnecting a sync request discards its session and ignores a late calendar response', async t => {
+test('disconnecting calendar sync discards the session while retaining an explicitly remembered accepted login', async t => {
   let release, reached, closed = 0;
   const waiting = new Promise(resolve => { reached = resolve; });
   const { server, vault } = await setup(t, { createClient: () => mockClient({ close: () => { closed++; }, readDeadlines: () => { reached(); return new Promise(resolve => { release = () => resolve({ items: [ITEM], warnings: [] }); }); } }) });
@@ -156,8 +156,17 @@ test('disconnecting a sync request discards its session and ignores a late calen
   await new Promise(resolve => setTimeout(resolve, 25));
   release();
   await new Promise(resolve => setTimeout(resolve, 10));
-  assert.equal(await vault.has(), false); assert.equal(closed, 1);
-  assert.deepEqual((await request(server)).json, { remembered: false, connected: false });
+  assert.equal(await vault.has(), true); assert.equal(closed, 1);
+  assert.deepEqual((await request(server)).json, { remembered: true, connected: false });
+});
+
+test('accepted credentials can be remembered when calendar parsing fails, and opting out clears them', async t => {
+  const { server, vault } = await setup(t, { createClient: () => mockClient({ readDeadlines: async () => { throw Object.assign(new Error('private-upstream-data'), { code: 'UNSUPPORTED', publicMessage: '日历格式待适配。' }); } }) });
+  const result = await post(server, { username: 'sample-user', password: 'sample-private-password', remember: true });
+  assert.equal(result.status, 502); assert.equal(result.json.error, '日历格式待适配。');
+  assert.equal(await vault.has(), true);
+  const second = await post(server, { remember: false });
+  assert.equal(second.status, 502); assert.equal(await vault.has(), false);
 });
 
 test('browser sync client and loopback API produce a validated merge without persisting credentials', async t => {

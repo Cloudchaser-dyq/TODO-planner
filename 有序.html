@@ -649,13 +649,22 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
 .pku-item-heading small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
 .pku-item-date { margin: 10px 0 0 26px; color: var(--muted); font-family: var(--mono); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .pku-match-label { display: grid; gap: 7px; margin: 13px 0 0 26px; font-size: 12px; color: var(--muted); }
+.pku-candidates { display: grid; gap: 9px; margin: 13px 0 0 26px; padding: 12px 14px 12px 28px; border-left: 2px solid var(--purple); background: var(--purple-soft); font-size: 12px; }
+.pku-candidates strong, .pku-candidates span { display: block; overflow-wrap: anywhere; line-height: 1.7; }
+.pku-candidates strong { font-weight: 500; color: var(--ink); }
+.pku-candidates span { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.pku-other-button { margin-left: 26px; }
+.pku-manual-picker { padding: 17px; margin: 17px 0; border: 1px solid var(--purple-line); background: var(--purple-soft); border-radius: 6px; }
+.pku-manual-picker h4 { margin: 0 0 8px; font-size: 15px; }
+.pku-manual-picker label { margin: 13px 0; }
+.pku-manual-picker .button-row { margin-top: 12px; }
 .pku-request-actions { flex-wrap: wrap; }
 @media (max-width: 640px) {
   .pku-dialog { width: calc(100vw - 24px); }
   .pku-request-actions > .danger-text { flex-basis: 100%; justify-content: flex-start; }
   .pku-request-actions > .button { flex: 1; min-width: 0; padding-inline: 11px; }
   .pku-item { padding: 13px 12px; }
-  .pku-item-date, .pku-match-label { margin-left: 0; }
+  .pku-item-date, .pku-match-label, .pku-candidates, .pku-other-button { margin-left: 0; }
 }
 
   </style>
@@ -752,7 +761,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       <p id="pku-status" class="ai-status" role="status" aria-live="polite"></p><p id="pku-error" class="form-error" role="alert"></p>
       <div class="dialog-footer pku-request-actions"><button id="pku-forget" type="button" class="text-button danger-text" data-action="pku-forget">清除本机登录</button><button id="pku-check" type="button" class="button secondary" data-action="pku-check">检查连接</button><button id="pku-cancel" type="button" class="button secondary" data-action="pku-cancel" hidden>取消读取</button><button id="pku-read" type="submit" class="button primary">读取 DDL</button></div>
     </form>
-    <section id="pku-preview" class="pku-preview" hidden aria-labelledby="pku-preview-title"><h3 id="pku-preview-title">待同步事项</h3><p id="pku-summary" class="muted small"></p><p id="pku-warnings" class="muted small"></p><p class="muted small">时间按北京时间显示；同名任务可选择关联。更新 DDL 会保留你的进度、目标和估时。</p><div id="pku-item-list" class="pku-item-list"></div><div class="ai-preview-actions"><button id="pku-apply" class="button primary" type="button" data-action="pku-apply" disabled>确认合并到任务</button></div></section>
+    <section id="pku-preview" class="pku-preview" hidden aria-labelledby="pku-preview-title"><h3 id="pku-preview-title">待同步事项</h3><p id="pku-summary" class="muted small"></p><p id="pku-warnings" class="muted small"></p><p class="muted small">时间按北京时间显示。请核对疑似重复项，选择关联或另建；名称不同也可手动关联。更新 DDL 会保留原任务的进度、目标和估时。</p><section id="pku-manual-picker" class="pku-manual-picker" hidden aria-labelledby="pku-manual-title"><h4 id="pku-manual-title">关联已有任务</h4><p id="pku-manual-item" class="muted small"></p><label>搜索本地任务<input id="pku-target-search" type="search" autocomplete="off" placeholder="输入名称或日期筛选"></label><label>选择要关联的任务<select id="pku-manual-target"><option value="">请选择已有任务</option></select></label><p id="pku-manual-count" class="muted small" role="status"></p><div class="button-row"><button type="button" class="button secondary" data-action="pku-manual-cancel">取消选择</button><button type="button" class="button primary" data-action="pku-manual-confirm">关联此任务</button></div></section><div id="pku-item-list" class="pku-item-list"></div><div class="ai-preview-actions"><button id="pku-apply" class="button primary" type="button" data-action="pku-apply" disabled>确认合并到任务</button></div></section>
   </dialog>
   <dialog id="confirm-dialog" class="dialog compact-dialog"><div class="dialog-heading"><h2 id="confirm-title">确认操作</h2><button class="icon-button" type="button" data-close="confirm-dialog" aria-label="关闭">×</button></div><p id="confirm-message" class="subtitle"></p><div class="dialog-footer"><button class="button secondary" data-close="confirm-dialog">取消</button><button class="button primary" id="confirm-accept">确认</button></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
@@ -2059,6 +2068,95 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   const plain = value => !!value && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const cleanTitle = value => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
   const fail = message => ({ ok: false, errors: [message] });
+  function titleProfile(value) {
+    let text = value.normalize('NFKC').toLowerCase().trim().replace(/^[\s#*=~!！·•🔴\-–—]+/gu, '');
+    text = text.replace(/^(?:(?:19|20)\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?|\d{1,2}[-/.月]\d{1,2}日?|(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?:\s*[:：\-–—.)、]\s*|\s+|(?=[a-z\u3400-\u9fff【\[(]))/i, '');
+    const chinese = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+    text = text.replace(/第([一二三四五六七八九十]{1,3})(?=[次章节周题])/g, (all, digits) => {
+      if (digits.length === 1) return '第' + chinese[digits];
+      if (digits[0] === '十' && digits.length === 2) return '第' + (10 + chinese[digits[1]]);
+      if (digits[1] === '十') return '第' + (chinese[digits[0]] * 10 + (digits[2] ? chinese[digits[2]] : 0));
+      return all;
+    });
+    const canonical = text.replace(/home\s*work|assignment|\bhw(?=\d|\b)/g, '作业')
+      .replace(/laboratory|\blab(?=\d|\b)|实验/g, 'lab').replace(/quiz|exam|\btest(?=\d|\b)|考试|小测|测验/g, '考试')
+      .replace(/(\d)[^\p{L}\p{N}]+(?=\d)/gu, '$1|').replace(/[^\p{L}\p{N}|]/gu, '');
+    return { exact: cleanTitle(value), canonical };
+  }
+  function activity(text) {
+    if (/lab|上机/.test(text)) return 'lab';
+    if (/考试|期中|期末|测试/.test(text)) return 'exam';
+    if (/作业|习题|练习/.test(text)) return 'homework';
+    if (/论文|报告|paper|report/.test(text)) return 'paper';
+    return '';
+  }
+  function numbers(text) { return (text.match(/\d+/g) || []).map(value => value.replace(/^0+(?=\d)/, '')).join('|'); }
+  function topic(text) { return text.replace(/\d+|\||作业|习题|练习|考试|期中|期末|测试|lab|论文|报告|paper|report|课程|课后|课堂|本周|本次|书面|提交|完成|ddl|deadline|第|次|章节|章|周|题/g, ''); }
+  function meaningful(text) { return /[\u3400-\u9fff]{3}/.test(text) || /[a-z]{6}/.test(text); }
+  function grams(text) { const result = new Set(); for (let i = 1; i < text.length; i++) result.add(text.slice(i - 1, i + 1)); return result; }
+  function similarity(a, b) { const aa = grams(a), bb = grams(b); let count = 0; for (const token of aa) if (bb.has(token)) count++; return aa.size + bb.size ? 2 * count / (aa.size + bb.size) : 0; }
+  function courseForms(course) {
+    const fragments = [course, course.replace(/[（(【\[][\s\S]*?[）)】\]]/g, '')];
+    for (const match of course.matchAll(/[（(【\[]([^）)】\]]+)[）)】\]]/g)) fragments.push(match[1]);
+    for (const match of course.matchAll(/(?:^|[^A-Za-z0-9])([A-Z]{2,8}(?:[- ]?\d{1,4})?)(?=$|[^A-Za-z0-9])/g)) fragments.push(match[1]);
+    return Array.from(new Set(fragments.map(value => titleProfile(value).canonical).filter(value => value.length >= 2 && !/^\d+$/.test(value)))).sort((a, b) => b.length - a.length);
+  }
+  function stripCourse(text, forms) {
+    for (const form of forms) if (text.startsWith(form)) {
+      const rest = text.slice(form.length);
+      if (/^[a-z]+$/.test(form) && /^[a-z]/.test(rest) && !/^(?:lab|hw|homework|assignment|quiz|exam|paper|report)/.test(rest)) continue;
+      return { core: rest, course: true };
+    }
+    return { core: text, course: false };
+  }
+  function taskChoice(task) { return { id: task.id, title: task.title, due: task.due, progress: task.progress, done: task.done }; }
+  function createCandidateIndex(tasks) {
+    const profiles = tasks.map(task => ({ task, ...titleProfile(task.title), dueDay: task.due ? Date.parse(task.due.slice(0, 10) + 'T00:00:00Z') : null, courseCache: new Map() })), exact = new Map(), canonical = new Map(), topics = new Map(), courses = new Map(), forms = new Map();
+    function add(index, key, profile) { if (!index.has(key)) index.set(key, []); index.get(key).push(profile); }
+    for (const profile of profiles) {
+      add(exact, profile.exact, profile); add(canonical, profile.canonical, profile);
+      const content = topic(profile.canonical); if (meaningful(content)) for (const gram of grams(content)) add(topics, gram, profile);
+    }
+    return { profiles, exact, canonical, topics, courses, forms };
+  }
+  function findCandidates(item, index) {
+    if (!index.forms.has(item.course)) index.forms.set(item.course, courseForms(item.course));
+    const remote = titleProfile(item.title), displayed = titleProfile(item.displayTitle), forms = index.forms.get(item.course), remoteCore = stripCourse(remote.canonical, forms).core;
+    const remoteActivity = activity(remoteCore), remoteNumbers = numbers(remoteCore), remoteTopic = topic(remoteCore), dueDay = Date.parse(item.due.slice(0, 10) + 'T00:00:00Z'), pool = new Map();
+    function include(values) { for (const value of values || []) pool.set(value.task.id, value); }
+    include(index.exact.get(remote.exact)); include(index.exact.get(displayed.exact));
+    include(index.canonical.get(remote.canonical)); include(index.canonical.get(displayed.canonical));
+    const courseKey = JSON.stringify(forms);
+    if (!index.courses.has(courseKey)) index.courses.set(courseKey, forms.length ? index.profiles.filter(profile => stripCourse(profile.canonical, forms).course) : []);
+    include(index.courses.get(courseKey));
+    if (meaningful(remoteTopic)) {
+      const counts = new Map(); for (const gram of grams(remoteTopic)) for (const profile of index.topics.get(gram) || []) counts.set(profile, (counts.get(profile) || 0) + 1);
+      for (const [profile, count] of counts) if (count >= 2) pool.set(profile.task.id, profile);
+    }
+    const result = [];
+    for (const profile of pool.values()) {
+      if (!profile.courseCache.has(courseKey)) { const stripped = stripCourse(profile.canonical, forms); profile.courseCache.set(courseKey, { ...stripped, activity: activity(stripped.core), numbers: numbers(stripped.core), topic: topic(stripped.core) }); }
+      const stripped = profile.courseCache.get(courseKey), local = stripped.core, localActivity = stripped.activity, localNumbers = stripped.numbers, localTopic = stripped.topic, distance = profile.dueDay === null ? null : Math.abs(profile.dueDay - dueDay) / 86400000;
+      if ((remoteActivity === 'lab' || localActivity === 'lab') && remoteActivity !== localActivity || (remoteActivity === 'exam' || localActivity === 'exam') && remoteActivity !== localActivity) continue;
+      const exact = profile.exact === remote.exact || profile.exact === displayed.exact;
+      if (!exact && remoteNumbers && localNumbers && remoteNumbers !== localNumbers) continue;
+      let score = 0, reason = '';
+      if (exact) { score = 100; reason = '名称相同，请核对课程'; }
+      else if ((local === remoteCore || profile.canonical === remote.canonical || profile.canonical === displayed.canonical) && (meaningful(remoteTopic) || stripped.course && remoteNumbers && remoteNumbers === localNumbers) && (distance === null || distance <= 21)) {
+        score = 94; reason = '去除日期前缀、标点后名称一致';
+      } else if (stripped.course && remoteActivity && remoteActivity === localActivity && remoteNumbers && remoteNumbers === localNumbers && (distance === null || distance <= 14)) {
+        score = 88; reason = '课程、事项类型及编号一致';
+      } else if (stripped.course && remoteActivity && remoteActivity === localActivity && distance === 0 && (!remoteNumbers || !localNumbers)) {
+        score = 72; reason = '课程及事项类型相同、DDL 同日，需核对具体内容';
+      } else if (meaningful(remoteTopic) && meaningful(localTopic) && (distance === null || distance <= 7) && similarity(remoteTopic, localTopic) >= 0.82) {
+        score = 80; reason = '标题内容接近，请核对是否同一事项';
+      }
+      if (!score) continue;
+      if (distance !== null && !reason.includes('DDL')) reason += distance === 0 ? '；DDL 同日' : '；DDL 相差 ' + distance + ' 天';
+      result.push({ ...taskChoice(profile.task), match: exact ? 'exact' : 'similar', reason, score, distance });
+    }
+    return result.sort((a, b) => b.score - a.score || (a.distance === null ? Infinity : a.distance) - (b.distance === null ? Infinity : b.distance) || a.id.localeCompare(b.id)).slice(0, 6);
+  }
   function validDue(value) {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T(?:[01]\d|2[0-3]):[0-5]\d)?$/.test(value)) return false;
     const [year, month, day] = value.slice(0, 10).split('-').map(Number), date = new Date(year, month - 1, day, 12);
@@ -2080,20 +2178,19 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   function createPlan(state, input) {
     const checked = D.validateState(state); if (!checked.ok) return fail('当前任务数据无效，请先恢复本地数据。');
     let items; try { items = normalizeItems(input); } catch (error) { return fail(error.message); }
-    const tasks = checked.value.tasks;
+    const tasks = checked.value.tasks, linkable = tasks.filter(task => !D.isEvent(task) && !task.sourceGroup.startsWith('pku:'));
+    const candidateIndex = createCandidateIndex(linkable);
     const rows = [];
     for (const item of items) {
       const group = 'pku:' + item.sourceId, linked = tasks.filter(task => task.sourceGroup === group);
       if (linked.length > 1) return fail('多个本地任务关联到同一教学网事项，请先整理重复关联。');
       const task = linked[0];
       if (task && D.isEvent(task)) return fail('教学网作业已被改为固定事件，请先解除关联或恢复为任务。');
-      const titles = [item.title, item.displayTitle].map(cleanTitle);
-      const candidates = task ? [] : tasks.filter(candidate => !D.isEvent(candidate) && !candidate.sourceGroup.startsWith('pku:') && titles.includes(cleanTitle(candidate.title)))
-        .map(candidate => ({ id: candidate.id, title: candidate.title, due: candidate.due }));
+      const candidates = task ? [] : findCandidates(item, candidateIndex);
       rows.push({ item, taskId: task ? task.id : '', beforeDue: task ? task.due : '', candidates,
         type: task ? (task.due === item.due ? 'unchanged' : 'update') : 'create' });
     }
-    return { ok: true, errors: [], baseTasks: JSON.stringify(state.tasks), rows };
+    return { ok: true, errors: [], baseTasks: JSON.stringify(state.tasks), rows, linkableTasks: linkable.map(taskChoice) };
   }
   function applyPlan(state, plan, selections) {
     if (!plan || !plan.ok || !Array.isArray(plan.rows) || plan.baseTasks !== JSON.stringify(state.tasks)) return fail('任务已有更新，请重新读取 DDL 后再合并。');
@@ -2110,7 +2207,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
         if (choice.targetId !== row.taskId) return fail('已关联事项应更新原任务。');
         task = next.tasks.find(entry => entry.id === row.taskId);
       } else if (choice.targetId !== null) {
-        if (!row.candidates.some(candidate => candidate.id === choice.targetId)) return fail('只能关联预览中列出的同名任务。');
+        if (!Array.isArray(plan.linkableTasks) || !plan.linkableTasks.some(candidate => candidate.id === choice.targetId)) return fail('只能关联当前预览中可手选的本地任务。');
         task = next.tasks.find(entry => entry.id === choice.targetId);
       }
       if (task) {
@@ -2194,6 +2291,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   let aiPending = null, aiController = null, aiRequestVersion = 0;
   let pkuPending = null, pkuController = null, pkuRequestVersion = 0, pkuChallenge = null;
   let pkuRememberKnown = false, pkuRememberTouched = false, pkuRememberKey = '';
+  let pkuManualRow = -1, pkuManualOrder = [];
 
   function notify(message) {
     $('toast').textContent = message; $('toast').hidden = false;
@@ -2687,6 +2785,50 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
     pkuPending = null; $('pku-preview').hidden = true; $('pku-item-list').innerHTML = '';
     $('pku-summary').textContent = ''; $('pku-warnings').textContent = ''; $('pku-apply').disabled = true;
     $('pku-apply').textContent = '确认合并到任务';
+    closePKUManualPicker();
+  }
+  function pkuChoiceLabel(task) {
+    return task.title + '（' + (task.due.replace('T', ' ') || '未设 DDL') + ' · ' + (task.done ? '已完成 ' : '进度 ') + (task.progress == null ? '待填写' : task.progress + '%') + '）';
+  }
+  function pkuRowOptions(row, manualTask) {
+    const candidates = row.candidates.length > 0;
+    return (candidates ? '<option value="" selected>请选择关联或另建</option>' : '') + '<option value="new"' + (!candidates ? ' selected' : '') + '>另建为新任务</option>' +
+      row.candidates.map(task => '<option value="' + esc('task:' + task.id) + '">建议关联：' + esc(pkuChoiceLabel(task)) + '</option>').join('') +
+      (manualTask && !row.candidates.some(task => task.id === manualTask.id) ? '<option value="' + esc('task:' + manualTask.id) + '">手选关联：' + esc(pkuChoiceLabel(manualTask)) + '</option>' : '');
+  }
+  function closePKUManualPicker() {
+    pkuManualRow = -1; pkuManualOrder = []; $('pku-manual-picker').hidden = true; $('pku-target-search').value = '';
+    $('pku-manual-target').innerHTML = '<option value="">请选择已有任务</option>'; $('pku-manual-target').value = '';
+    $('pku-manual-item').textContent = ''; $('pku-manual-count').textContent = '';
+  }
+  function renderPKUManualChoices() {
+    if (!pkuPending || pkuManualRow < 0) return;
+    const query = $('pku-target-search').value.normalize('NFKC').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const tasks = pkuManualOrder.filter(task => {
+      const text = (task.title + ' ' + task.due.replace('T', ' ')).normalize('NFKC').toLowerCase(); return query.every(term => text.includes(term));
+    });
+    $('pku-manual-target').innerHTML = '<option value="">请选择已有任务</option>' + tasks.slice(0, 100).map(task => '<option value="' + esc(task.id) + '">' + esc(pkuChoiceLabel(task)) + '</option>').join('');
+    $('pku-manual-target').value = '';
+    $('pku-manual-count').textContent = tasks.length > 100 ? '匹配 ' + tasks.length + ' 项，先显示 DDL 最接近的 100 项；输入名称或日期可继续筛选。' : '共 ' + tasks.length + ' 项可关联任务，包含已完成任务。';
+  }
+  function openPKUManualPicker(index) {
+    if (!pkuPending || !Number.isInteger(index) || !pkuPending.plan.rows[index] || pkuPending.plan.rows[index].taskId) return;
+    closePKUManualPicker(); pkuManualRow = index; $('pku-select-' + index).checked = false;
+    const dueDay = Date.parse(pkuPending.plan.rows[index].item.due.slice(0, 10) + 'T00:00:00Z');
+    pkuManualOrder = pkuPending.plan.linkableTasks.map(task => ({ ...task, distance: task.due ? Math.abs(Date.parse(task.due.slice(0, 10) + 'T00:00:00Z') - dueDay) : Infinity }))
+      .sort((a, b) => a.distance - b.distance || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+    $('pku-manual-item').textContent = '教学网事项：' + pkuPending.plan.rows[index].item.displayTitle;
+    $('pku-manual-picker').hidden = false; renderPKUManualChoices(); $('pku-target-search').focus();
+    if (typeof $('pku-manual-picker').scrollIntoView === 'function') $('pku-manual-picker').scrollIntoView({ block: 'nearest' });
+  }
+  function confirmPKUManualChoice() {
+    if (!pkuPending || pkuManualRow < 0) return;
+    const id = $('pku-manual-target').value, task = pkuPending.plan.linkableTasks.find(entry => entry.id === id);
+    if (!task) { $('pku-error').textContent = '请先选择要关联的本地任务。'; return; }
+    const select = $('pku-target-' + pkuManualRow);
+    select.innerHTML = pkuRowOptions(pkuPending.plan.rows[pkuManualRow], task); select.value = 'task:' + task.id;
+    $('pku-select-' + pkuManualRow).checked = true;
+    $('pku-error').textContent = ''; closePKUManualPicker();
   }
   function cancelPKURequest() {
     pkuRequestVersion += 1; if (pkuController) pkuController.abort(); pkuController = null;
@@ -2721,10 +2863,11 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   function renderPKUPlan(plan) {
     $('pku-item-list').innerHTML = plan.rows.map((row, index) => {
       const unchanged = row.type === 'unchanged', candidates = row.candidates.length > 0;
-      const label = unchanged ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : candidates ? '发现同名任务' : '新增任务';
+      const label = unchanged ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : candidates ? '发现疑似重复，请核对' : '待新增，也可手动关联';
       return '<article class="pku-item"><label class="pku-item-heading"><input id="pku-select-' + index + '" type="checkbox"' + (unchanged ? ' disabled' : !candidates ? ' checked' : '') + '><span><strong>' + esc(row.item.displayTitle) + '</strong><small>' + esc(label) + '</small></span></label>' +
         '<p class="pku-item-date">' + (row.type === 'update' ? esc(row.beforeDue.replace('T', ' ') || '未设 DDL') + ' → ' : '') + esc(row.item.due.replace('T', ' ')) + '</p>' +
-        (candidates ? '<label class="pku-match-label" for="pku-target-' + index + '">处理方式<select id="pku-target-' + index + '" data-pku-index="' + index + '"><option value="" selected>请选择关联或另建</option><option value="new">另建为新任务</option>' + row.candidates.map(task => '<option value="' + esc(task.id) + '">关联：' + esc(task.title) + '（' + esc(task.due.replace('T', ' ') || '未设 DDL') + '）</option>').join('') + '</select></label>' : '') + '</article>';
+        (candidates ? '<ul class="pku-candidates">' + row.candidates.map(task => '<li><strong>' + esc(pkuChoiceLabel(task)) + '</strong><span>' + esc(task.reason) + '</span></li>').join('') + '</ul>' : '') +
+        (!row.taskId ? '<label class="pku-match-label" for="pku-target-' + index + '">处理方式<select id="pku-target-' + index + '" data-pku-index="' + index + '">' + pkuRowOptions(row) + '</select></label><button type="button" class="text-button pku-other-button" id="pku-other-' + index + '" data-action="pku-other" data-index="' + index + '">关联其他已有任务</button>' : '') + '</article>';
     }).join('');
     const changed = plan.rows.filter(row => row.type !== 'unchanged').length;
     $('pku-summary').textContent = '读取到 ' + plan.rows.length + ' 件事项，其中 ' + changed + ' 件可新增、关联或更新。';
@@ -2802,10 +2945,11 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       for (let index = 0; index < pkuPending.plan.rows.length; index++) {
         const row = pkuPending.plan.rows[index]; if (!$('pku-select-' + index).checked || row.type === 'unchanged') continue;
         let targetId = row.taskId || null;
-        if (row.candidates.length) {
+        if (!row.taskId) {
           const choice = $('pku-target-' + index).value;
-          if (!choice) { $('pku-error').textContent = '请为所选同名事项选择“关联”或“另建”。'; return; }
-          targetId = choice === 'new' ? null : choice;
+          if (!choice && row.candidates.length) { $('pku-error').textContent = '请为所选疑似重复事项选择“关联”或“另建”。'; return; }
+          if (choice && choice !== 'new' && !choice.startsWith('task:')) { $('pku-error').textContent = '所选关联任务无效，请重新选择。'; return; }
+          targetId = choice === 'new' || !choice ? null : choice.slice(5);
         }
         selections.push({ sourceId: row.item.sourceId, targetId });
       }
@@ -2865,6 +3009,9 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
       case 'pku-forget': return runPKUOperation('forget');
       case 'pku-sms': return runPKUOperation('sms');
       case 'pku-apply': applyPKUPlan(); break;
+      case 'pku-other': openPKUManualPicker(Number(button.dataset.index)); break;
+      case 'pku-manual-confirm': confirmPKUManualChoice(); break;
+      case 'pku-manual-cancel': closePKUManualPicker(); break;
       case 'pku-cancel': cancelPKURequest(); clearPKUPlan(); $('pku-status').textContent = '已取消读取。'; break;
       case 'apply-ai': applyAIPlan(); break;
       case 'cancel-ai': cancelAIRequest(); break;
@@ -3023,6 +3170,7 @@ noscript p { position: fixed; z-index: 200; inset: auto 0 0; padding: 20px; back
   $('pku-item-list').addEventListener('change', event => {
     if (event.target.dataset.pkuIndex !== undefined) $('pku-select-' + event.target.dataset.pkuIndex).checked = !!event.target.value;
   });
+  $('pku-target-search').addEventListener('input', renderPKUManualChoices);
   $('pku-dialog').addEventListener('close', () => {
     cancelPKURequest(); clearPKUPlan(); clearPKUVerification(); $('pku-password').value = ''; $('pku-username').value = '';
     pkuRememberKnown = false; pkuRememberTouched = false;

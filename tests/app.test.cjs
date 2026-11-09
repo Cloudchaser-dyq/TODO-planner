@@ -1551,7 +1551,7 @@ test('PKU preview explicitly links same-name tasks, updates DDL and keeps creden
   assert.equal(app.get('pku-error').textContent, ''); assert.equal(app.raw(), before, 'reading only shows a preview');
   assert.equal(app.get('pku-preview').hidden, false); assert.equal(app.get('pku-select-0').checked, false);
   assert.equal(app.get('pku-password').value, ''); assert.equal(app.get('pku-username').value, '');
-  const select = app.get('pku-target-0'); select.value = existing.id; select.dispatch('change');
+  const select = app.get('pku-target-0'); select.value = 'task:' + existing.id; select.dispatch('change');
   assert.equal(app.get('pku-select-0').checked, true); app.get('pku-apply').click();
   assert.equal(app.get('pku-error').textContent, '');
   const first = app.saved(); assert.equal(first.tasks.length, 1);
@@ -1672,4 +1672,55 @@ test('PKU merge rejects newer task changes and a failed-save retry creates each 
   options.writeError = false; app.get('pku-apply').click(); assert.equal(app.get('pku-error').textContent, '');
   assert.equal(app.saved().tasks.length, 2); assert.equal(app.saved().tasks.filter(task => task.sourceGroup.startsWith('pku:')).length, 1);
   app.get('pku-apply').click(); assert.equal(app.saved().tasks.length, 2);
+});
+
+test('PKU approximate duplicate preview shows local DDL, completed progress and reasons without selecting it', async () => {
+  const remote = pkuItem({ title: 'Homework 03', course: 'DEMO' });
+  const app = boot({ fetch: async () => pkuResponse({ items: [remote], warnings: [] }) });
+  const original = addTask(app, { title: '0408 ＤＥＭＯ：第３次课后作业', due: '2026-11-12', progress: 100, target: 100, totalMinutes: 180 });
+  openPKUForm(app); const before = app.raw(); await app.submit('pku-form').settled;
+  const markup = app.get('pku-item-list').innerHTML;
+  assert.match(markup, /疑似重复/); assert.match(markup, /课程.*编号一致/); assert.match(markup, /已完成 100%/); assert.match(markup, /2026-11-12/);
+  assert.equal(app.get('pku-select-0').checked, false); assert.equal(app.raw(), before);
+  const select = app.get('pku-target-0'); select.value = 'task:' + original.id; select.dispatch('change'); app.get('pku-apply').click();
+  assert.equal(app.get('pku-error').textContent, ''); assert.equal(app.saved().tasks.length, 1);
+  assert.deepEqual([app.saved().tasks[0].id, app.saved().tasks[0].progress, app.saved().tasks[0].totalMinutes], [original.id, 100, 180]);
+});
+
+test('PKU shared manual picker links arbitrary names and blocks two remote items from sharing one local task', async () => {
+  const remotes = [pkuItem(), pkuItem({ sourceId: 'b'.repeat(64), title: '远端另一事项' })];
+  const app = boot({ fetch: async () => pkuResponse({ items: remotes, warnings: [] }) });
+  const original = addTask(app, { title: '我自己的特殊别名', due: '2026-11-10', progress: 30, target: 70 });
+  openPKUForm(app); const before = app.raw(); await app.submit('pku-form').settled;
+  assert.doesNotMatch(app.get('pku-item-list').innerHTML, /疑似重复/);
+  function manuallyChoose(index) {
+    app.get('pku-other-' + index).click();
+    assert.equal(app.get('pku-manual-picker').hidden, false); assert.equal(app.get('pku-select-' + index).checked, false);
+    app.get('pku-target-search').value = '特殊别名'; app.get('pku-target-search').dispatch('input');
+    assert.match(app.get('pku-manual-target').innerHTML, /我自己的特殊别名/);
+    app.get('pku-manual-target').value = original.id; app.clickData('action', 'pku-manual-confirm');
+    assert.equal(app.get('pku-manual-picker').hidden, true); assert.equal(app.get('pku-select-' + index).checked, true);
+    assert.equal(app.get('pku-target-' + index).value, 'task:' + original.id);
+  }
+  manuallyChoose(0); manuallyChoose(1); app.get('pku-apply').click();
+  assert.match(app.get('pku-error').textContent, /只能关联一个/); assert.equal(app.raw(), before);
+  app.get('pku-target-1').value = 'new'; app.get('pku-target-1').dispatch('change'); app.get('pku-apply').click();
+  assert.equal(app.get('pku-error').textContent, ''); assert.equal(app.saved().tasks.length, 2);
+  const linked = app.saved().tasks.find(task => task.id === original.id);
+  assert.deepEqual([linked.progress, linked.target, linked.totalMinutes, linked.sourceGroup], [30, 70, 300, 'pku:' + remotes[0].sourceId]);
+});
+
+test('PKU previews keep all-task options in one bounded searchable picker instead of repeating them per remote row', async () => {
+  const D = require('../dist/data.js'), seed = D.emptyState('2026-11-02');
+  seed.tasks = Array.from({ length: 500 }, (_, index) => ({ id: 'local-' + index, title: '本地自定义 ' + index + ' 资料', category: '课业', kind: 'task', due: '2026-11-12', progress: 0, target: 100, totalMinutes: null, importance: null, enjoyment: null, nextAction: '' }));
+  const items = Array.from({ length: 40 }, (_, index) => pkuItem({ sourceId: index.toString(16).padStart(64, '0'), title: '远端安排' + index }));
+  const app = boot({ raw: JSON.stringify(seed), fetch: async () => pkuResponse({ items, warnings: [] }) });
+  openPKUForm(app); await app.submit('pku-form').settled;
+  assert.ok(app.get('pku-item-list').innerHTML.length < 60000);
+  assert.doesNotMatch(app.get('pku-item-list').innerHTML, /本地自定义/);
+  app.clickData('action', 'pku-other');
+  assert.equal([...app.get('pku-manual-target').innerHTML.matchAll(/<option\b/g)].length, 101);
+  app.get('pku-target-search').value = '本地自定义 499'; app.get('pku-target-search').dispatch('input');
+  assert.equal([...app.get('pku-manual-target').innerHTML.matchAll(/<option\b/g)].length, 2);
+  assert.match(app.get('pku-manual-target').innerHTML, /本地自定义 499 资料/);
 });

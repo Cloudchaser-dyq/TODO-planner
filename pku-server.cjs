@@ -124,19 +124,23 @@ function createServer(options = {}) {
           await active.client.login({ username: active.username, password: active.password, verification: input.verification || {} });
           active.connected = true;
         }
+        if (started !== generation || session !== active) { send(409, { error: '本次同步已取消。' }); return; }
+        // Remember an accepted login even if a later calendar response needs
+        // adapting. The user's explicit preference is applied after validation.
+        if (active.remember) await vault.save({ username: active.username, password: active.password });
+        else if (input.remember === false) await vault.clear();
+        if (started !== generation || session !== active) { send(409, { error: '本次同步已取消。' }); return; }
         const result = await active.client.readDeadlines(active.username);
         if (started !== generation || session !== active) { send(409, { error: '本次同步已取消。' }); return; }
         // Strict projection prevents arbitrary upstream metadata (or credentials)
         // from crossing the loopback API boundary.
         const items = projectItems(result.items);
-        if (active.remember) await vault.save({ username: active.username, password: active.password });
-        else if (input.remember === false) await vault.clear();
         if (started !== generation) { send(409, { error: '本次同步已取消。' }); return; }
         send(200, { items, warnings: Array.isArray(result.warnings) ? result.warnings.filter(w => typeof w === 'string').slice(0, 20) : [] });
       } catch (error) {
         if (error.code === 'CHALLENGE' && started === generation) {
           const challenge = safeChallenge(error.challenge);
-          send(409, { error: '请完成教学网身份验证，再次点击“读取 DDL”。', challenge });
+          send(409, { error: error.publicMessage || '请完成教学网身份验证，再次点击“读取 DDL”。', challenge });
         } else {
           if (started === generation) closeSession();
           send(error.code === 'AUTH_FAILED' ? 401 : 502, { error: error.publicMessage || '教学网同步失败，请检查网络和登录信息后重试。' });

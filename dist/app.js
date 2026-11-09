@@ -30,6 +30,7 @@
   let aiPending = null, aiController = null, aiRequestVersion = 0;
   let pkuPending = null, pkuController = null, pkuRequestVersion = 0, pkuChallenge = null;
   let pkuRememberKnown = false, pkuRememberTouched = false, pkuRememberKey = '';
+  let pkuManualRow = -1, pkuManualOrder = [];
 
   function notify(message) {
     $('toast').textContent = message; $('toast').hidden = false;
@@ -523,6 +524,50 @@
     pkuPending = null; $('pku-preview').hidden = true; $('pku-item-list').innerHTML = '';
     $('pku-summary').textContent = ''; $('pku-warnings').textContent = ''; $('pku-apply').disabled = true;
     $('pku-apply').textContent = '确认合并到任务';
+    closePKUManualPicker();
+  }
+  function pkuChoiceLabel(task) {
+    return task.title + '（' + (task.due.replace('T', ' ') || '未设 DDL') + ' · ' + (task.done ? '已完成 ' : '进度 ') + (task.progress == null ? '待填写' : task.progress + '%') + '）';
+  }
+  function pkuRowOptions(row, manualTask) {
+    const candidates = row.candidates.length > 0;
+    return (candidates ? '<option value="" selected>请选择关联或另建</option>' : '') + '<option value="new"' + (!candidates ? ' selected' : '') + '>另建为新任务</option>' +
+      row.candidates.map(task => '<option value="' + esc('task:' + task.id) + '">建议关联：' + esc(pkuChoiceLabel(task)) + '</option>').join('') +
+      (manualTask && !row.candidates.some(task => task.id === manualTask.id) ? '<option value="' + esc('task:' + manualTask.id) + '">手选关联：' + esc(pkuChoiceLabel(manualTask)) + '</option>' : '');
+  }
+  function closePKUManualPicker() {
+    pkuManualRow = -1; pkuManualOrder = []; $('pku-manual-picker').hidden = true; $('pku-target-search').value = '';
+    $('pku-manual-target').innerHTML = '<option value="">请选择已有任务</option>'; $('pku-manual-target').value = '';
+    $('pku-manual-item').textContent = ''; $('pku-manual-count').textContent = '';
+  }
+  function renderPKUManualChoices() {
+    if (!pkuPending || pkuManualRow < 0) return;
+    const query = $('pku-target-search').value.normalize('NFKC').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const tasks = pkuManualOrder.filter(task => {
+      const text = (task.title + ' ' + task.due.replace('T', ' ')).normalize('NFKC').toLowerCase(); return query.every(term => text.includes(term));
+    });
+    $('pku-manual-target').innerHTML = '<option value="">请选择已有任务</option>' + tasks.slice(0, 100).map(task => '<option value="' + esc(task.id) + '">' + esc(pkuChoiceLabel(task)) + '</option>').join('');
+    $('pku-manual-target').value = '';
+    $('pku-manual-count').textContent = tasks.length > 100 ? '匹配 ' + tasks.length + ' 项，先显示 DDL 最接近的 100 项；输入名称或日期可继续筛选。' : '共 ' + tasks.length + ' 项可关联任务，包含已完成任务。';
+  }
+  function openPKUManualPicker(index) {
+    if (!pkuPending || !Number.isInteger(index) || !pkuPending.plan.rows[index] || pkuPending.plan.rows[index].taskId) return;
+    closePKUManualPicker(); pkuManualRow = index; $('pku-select-' + index).checked = false;
+    const dueDay = Date.parse(pkuPending.plan.rows[index].item.due.slice(0, 10) + 'T00:00:00Z');
+    pkuManualOrder = pkuPending.plan.linkableTasks.map(task => ({ ...task, distance: task.due ? Math.abs(Date.parse(task.due.slice(0, 10) + 'T00:00:00Z') - dueDay) : Infinity }))
+      .sort((a, b) => a.distance - b.distance || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+    $('pku-manual-item').textContent = '教学网事项：' + pkuPending.plan.rows[index].item.displayTitle;
+    $('pku-manual-picker').hidden = false; renderPKUManualChoices(); $('pku-target-search').focus();
+    if (typeof $('pku-manual-picker').scrollIntoView === 'function') $('pku-manual-picker').scrollIntoView({ block: 'nearest' });
+  }
+  function confirmPKUManualChoice() {
+    if (!pkuPending || pkuManualRow < 0) return;
+    const id = $('pku-manual-target').value, task = pkuPending.plan.linkableTasks.find(entry => entry.id === id);
+    if (!task) { $('pku-error').textContent = '请先选择要关联的本地任务。'; return; }
+    const select = $('pku-target-' + pkuManualRow);
+    select.innerHTML = pkuRowOptions(pkuPending.plan.rows[pkuManualRow], task); select.value = 'task:' + task.id;
+    $('pku-select-' + pkuManualRow).checked = true;
+    $('pku-error').textContent = ''; closePKUManualPicker();
   }
   function cancelPKURequest() {
     pkuRequestVersion += 1; if (pkuController) pkuController.abort(); pkuController = null;
@@ -557,10 +602,11 @@
   function renderPKUPlan(plan) {
     $('pku-item-list').innerHTML = plan.rows.map((row, index) => {
       const unchanged = row.type === 'unchanged', candidates = row.candidates.length > 0;
-      const label = unchanged ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : candidates ? '发现同名任务' : '新增任务';
+      const label = unchanged ? 'DDL 未变' : row.type === 'update' ? '更新 DDL' : candidates ? '发现疑似重复，请核对' : '待新增，也可手动关联';
       return '<article class="pku-item"><label class="pku-item-heading"><input id="pku-select-' + index + '" type="checkbox"' + (unchanged ? ' disabled' : !candidates ? ' checked' : '') + '><span><strong>' + esc(row.item.displayTitle) + '</strong><small>' + esc(label) + '</small></span></label>' +
         '<p class="pku-item-date">' + (row.type === 'update' ? esc(row.beforeDue.replace('T', ' ') || '未设 DDL') + ' → ' : '') + esc(row.item.due.replace('T', ' ')) + '</p>' +
-        (candidates ? '<label class="pku-match-label" for="pku-target-' + index + '">处理方式<select id="pku-target-' + index + '" data-pku-index="' + index + '"><option value="" selected>请选择关联或另建</option><option value="new">另建为新任务</option>' + row.candidates.map(task => '<option value="' + esc(task.id) + '">关联：' + esc(task.title) + '（' + esc(task.due.replace('T', ' ') || '未设 DDL') + '）</option>').join('') + '</select></label>' : '') + '</article>';
+        (candidates ? '<ul class="pku-candidates">' + row.candidates.map(task => '<li><strong>' + esc(pkuChoiceLabel(task)) + '</strong><span>' + esc(task.reason) + '</span></li>').join('') + '</ul>' : '') +
+        (!row.taskId ? '<label class="pku-match-label" for="pku-target-' + index + '">处理方式<select id="pku-target-' + index + '" data-pku-index="' + index + '">' + pkuRowOptions(row) + '</select></label><button type="button" class="text-button pku-other-button" id="pku-other-' + index + '" data-action="pku-other" data-index="' + index + '">关联其他已有任务</button>' : '') + '</article>';
     }).join('');
     const changed = plan.rows.filter(row => row.type !== 'unchanged').length;
     $('pku-summary').textContent = '读取到 ' + plan.rows.length + ' 件事项，其中 ' + changed + ' 件可新增、关联或更新。';
@@ -638,10 +684,11 @@
       for (let index = 0; index < pkuPending.plan.rows.length; index++) {
         const row = pkuPending.plan.rows[index]; if (!$('pku-select-' + index).checked || row.type === 'unchanged') continue;
         let targetId = row.taskId || null;
-        if (row.candidates.length) {
+        if (!row.taskId) {
           const choice = $('pku-target-' + index).value;
-          if (!choice) { $('pku-error').textContent = '请为所选同名事项选择“关联”或“另建”。'; return; }
-          targetId = choice === 'new' ? null : choice;
+          if (!choice && row.candidates.length) { $('pku-error').textContent = '请为所选疑似重复事项选择“关联”或“另建”。'; return; }
+          if (choice && choice !== 'new' && !choice.startsWith('task:')) { $('pku-error').textContent = '所选关联任务无效，请重新选择。'; return; }
+          targetId = choice === 'new' || !choice ? null : choice.slice(5);
         }
         selections.push({ sourceId: row.item.sourceId, targetId });
       }
@@ -701,6 +748,9 @@
       case 'pku-forget': return runPKUOperation('forget');
       case 'pku-sms': return runPKUOperation('sms');
       case 'pku-apply': applyPKUPlan(); break;
+      case 'pku-other': openPKUManualPicker(Number(button.dataset.index)); break;
+      case 'pku-manual-confirm': confirmPKUManualChoice(); break;
+      case 'pku-manual-cancel': closePKUManualPicker(); break;
       case 'pku-cancel': cancelPKURequest(); clearPKUPlan(); $('pku-status').textContent = '已取消读取。'; break;
       case 'apply-ai': applyAIPlan(); break;
       case 'cancel-ai': cancelAIRequest(); break;
@@ -859,6 +909,7 @@
   $('pku-item-list').addEventListener('change', event => {
     if (event.target.dataset.pkuIndex !== undefined) $('pku-select-' + event.target.dataset.pkuIndex).checked = !!event.target.value;
   });
+  $('pku-target-search').addEventListener('input', renderPKUManualChoices);
   $('pku-dialog').addEventListener('close', () => {
     cancelPKURequest(); clearPKUPlan(); clearPKUVerification(); $('pku-password').value = ''; $('pku-username').value = '';
     pkuRememberKnown = false; pkuRememberTouched = false;

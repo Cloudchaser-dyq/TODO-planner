@@ -5,6 +5,10 @@ const crypto = require('node:crypto');
 const COURSE = 'https://course.pku.edu.cn';
 const IAAA = 'https://iaaa.pku.edu.cn';
 const CALLBACK = COURSE + '/webapps/bb-sso-BBLEARN/execute/authValidate/campusLogin';
+// Preserve the registered callback identifier exactly as PKU's login.html
+// declares it. The actual token exchange always uses the HTTPS URL above.
+const CALLBACK_ID = 'http://course.pku.edu.cn/webapps/bb-sso-BBLEARN/execute/authValidate/campusLogin';
+const OAUTH_ENTRY = IAAA + '/iaaa/oauth.jsp?' + new URLSearchParams({ appID: 'blackboard', appName: '1', redirectUrl: CALLBACK_ID });
 const CALENDAR = COURSE + '/webapps/calendar/viewPersonal';
 const DAY = 86400000;
 const ALLOWED_HOSTS = new Set(['course.pku.edu.cn', 'iaaa.pku.edu.cn']);
@@ -67,6 +71,28 @@ function cleanText(value, max) {
   return typeof value === 'string' ? value.replace(/<[^>]*>/g, '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max) : '';
 }
 
+// Diagnostics describe schema only. They must never include remote titles,
+// account identifiers, IDs, URLs, or the original value of a date field.
+function dateShape(value) {
+  if (value == null) return '缺失';
+  if (typeof value === 'number') return value >= 1e11 ? '毫秒数字' : '秒级数字';
+  if (typeof value !== 'string') return '非文本';
+  if (/^\d{10}$/.test(value)) return '秒数字文本';
+  if (/^\d{13}$/.test(value)) return '毫秒数字文本';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return '日期';
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(value)) return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? '带时区时刻' : '无时区时刻';
+  return '其他格式';
+}
+function safeTypeLabel(value) {
+  const labels = new Map(['assignment', 'gradableitem', 'gradable', 'gradables', 'gradebookcolumn', 'gradecolumn', 'gradebook', 'assessment', 'test', 'deadline', 'task', 'todo', 'course', 'coursecalendar', 'calendar', 'calendarevent', 'event', 'personal', 'institution', 'organization'].map(key => [key, key]));
+  if (typeof value !== 'string') return '非文本类型';
+  const known = labels.get(value.toLowerCase().replace(/[_ -]/g, '')) || labels.get(value.split(/[.:$]/).pop().toLowerCase().replace(/[_ -]/g, ''));
+  if (known) return known;
+  // Blackboard's type field is a system enum, separate from title/course/ID.
+  // Expose only short enum-like words, never arbitrary text or identifiers.
+  return /^[\p{L}_]{1,40}$/u.test(value) ? value : /^\d$/.test(value) ? '数字枚举' + value : '其他类型';
+}
+
 function parseDate(value) {
   // Accept millisecond epoch values only; ten-digit seconds are not guessed.
   if (typeof value === 'number') {
@@ -74,18 +100,23 @@ function parseDate(value) {
     return { due: new Date(value + 8 * 3600000).toISOString().slice(0, 16), epoch: value };
   }
   if (typeof value !== 'string') return null;
+  value = value.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const epoch = Date.parse(value + 'T00:00:00+08:00');
     if (!Number.isFinite(epoch) || new Date(epoch + 8 * 3600000).toISOString().slice(0, 10) !== value) return null;
     return { due: value, epoch };
   }
-  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})$/i);
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?$/i);
   if (!m || +m[4] > 23 || +m[5] > 59 || +(m[6] || 0) > 59 || +m[2] < 1 || +m[2] > 12 || +m[3] < 1) return null;
   const calendarDate = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
   if (calendarDate.getUTCMonth() + 1 !== +m[2] || calendarDate.getUTCDate() !== +m[3]) return null;
-  const epoch = Date.parse(value);
+  // Floating values are displayed as Beijing wall time, independently of the
+  // machine timezone. The preview explicitly asks the user to verify them.
+  const assumedZone = !m[7];
+  const normalized = value.replace(' ', 'T').replace(/([+-]\d{2})(\d{2})$/, '$1:$2') + (assumedZone ? '+08:00' : '');
+  const epoch = Date.parse(normalized);
   if (!Number.isFinite(epoch)) return null;
-  return { due: new Date(epoch + 8 * 3600000).toISOString().slice(0, 16), epoch };
+  return { due: new Date(epoch + 8 * 3600000).toISOString().slice(0, 16), epoch, assumedZone };
 }
 
 function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs = 15000 } = {}) {
@@ -157,7 +188,7 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
     return header;
   }
 
-  async function request(value, { method = 'GET', body, maxBytes = LIMIT, accept = 'application/json,text/html;q=0.9' } = {}) {
+  async function request(value, { method = 'GET', body, maxBytes = LIMIT, accept = 'application/json,text/html;q=0.9', ajax = false } = {}) {
     checkOpen();
     let url = safeUrl(value);
     const controller = new AbortController();
@@ -167,12 +198,16 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
       for (let redirects = 0; redirects <= 5; redirects++) {
         checkOpen();
         const headers = { Accept: accept, 'User-Agent': 'YouXu-Local-PKU-Sync/1.0' };
+        if (ajax && url.origin === IAAA) {
+          headers['X-Requested-With'] = 'XMLHttpRequest';
+          headers.Referer = OAUTH_ENTRY;
+        }
         const cookie = cookieHeader(url);
         if (cookie) headers.Cookie = cookie;
         if (body !== undefined) {
           headers['Content-Type'] = 'application/x-www-form-urlencoded;charset=UTF-8';
           headers.Origin = url.origin;
-          headers.Referer = IAAA + '/iaaa/oauth.jsp';
+          headers.Referer = OAUTH_ENTRY;
         }
         const response = await fetchImpl(url.href, { method, headers, body, redirect: 'manual', signal: controller.signal });
         checkOpen();
@@ -242,7 +277,7 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
 
   // IAAA is also a JSON API, so it deliberately bypasses the page host test.
   async function iaaaJson(path, options) {
-    const response = await request(IAAA + path, options);
+    const response = await request(IAAA + path, { ...options, ajax: true, accept: 'application/json, text/javascript, */*; q=0.01' });
     try { return JSON.parse(response.text); }
     catch { throw publicError('UPSTREAM', '北大身份认证暂时无法响应，请稍后重试。'); }
   }
@@ -269,9 +304,7 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
     preparedFor = null;
     publicKey = null;
     await request(COURSE + '/webapps/login/', { maxBytes: 1024 * 1024 });
-    const entry = new URL(IAAA + '/iaaa/oauth.jsp');
-    entry.search = new URLSearchParams({ appID: 'blackboard', appName: '1', redirectUrl: CALLBACK }).toString();
-    await request(entry, { maxBytes: 1024 * 1024 });
+    await request(OAUTH_ENTRY, { maxBytes: 1024 * 1024 });
     const keyData = await iaaaJson('/iaaa/getPublicKey.do', { maxBytes: 16384 });
     if (!keyData || keyData.success !== true || typeof keyData.key !== 'string' || keyData.key.length > 8192) {
       throw publicError('UNSUPPORTED', '北大身份认证加密信息暂不可用，请稍后重试。');
@@ -328,18 +361,30 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
     const result = await iaaaJson('/iaaa/oauthlogin.do', {
       method: 'POST', maxBytes: 32768,
       body: new URLSearchParams({ appid: 'blackboard', userName: username, password: encrypted,
-        randCode: verification.captcha || '', smsCode: verification.sms || '', otpCode: verification.otp || '', remTrustChk: 'false', redirUrl: CALLBACK }).toString()
+        randCode: verification.captcha || '', smsCode: verification.sms || '', otpCode: verification.otp || '', remTrustChk: 'false', redirUrl: CALLBACK_ID }).toString()
     });
     if (!result || result.success !== true) {
-      const errorCode = result && result.errors && result.errors.code;
+      const rawCode = result && result.errors && result.errors.code;
+      const errorCode = typeof rawCode === 'string' && /^E\d{2}$/.test(rawCode) ? rawCode : '';
+      const codeLabel = errorCode ? '（' + errorCode + '）' : '（未提供标准错误码）';
+      // Classify a few account-state messages locally; never relay upstream
+      // text, which can include account identifiers or other private details.
+      const upstreamMessage = typeof result?.errors?.msg === 'string' ? result.errors.msg : '';
+      if (/锁定|冻结|过于频繁|频率限制|too many|locked/i.test(upstreamMessage)) {
+        throw publicError('AUTH_FAILED', '北大认证暂时限制登录' + codeLabel + '，请按官网提示稍后重试。');
+      }
+      if (result && result.isFlag === true) {
+        throw publicError('AUTH_FAILED', '北大认证要求处理密码安全状态' + codeLabel + '，请先在北大统一认证官网完成提示操作。');
+      }
       if (['E03', 'E04', 'E05'].includes(errorCode) || (result && result.showCode === true)) {
         if (errorCode === 'E04') challenge.mode = 'sms';
         if (errorCode === 'E05') challenge.mode = 'otp';
         challenge = await withCaptcha({ mode: challenge.mode, captchaRequired: challenge.captchaRequired || errorCode === 'E03' || result.showCode === true });
-        throw publicError('CHALLENGE', '验证未通过，请重新填写验证码或手机令牌。', { ...challenge });
+        throw publicError('CHALLENGE', '北大验证未通过' + codeLabel + '，请重新填写验证码或手机令牌。', { ...challenge });
       }
-      if (errorCode === 'E02') throw publicError('AUTH_FAILED', '请先在北大身份认证页面激活账号。');
-      throw publicError('AUTH_FAILED', '教学网登录失败，请检查账号、密码和验证信息。');
+      if (errorCode === 'E02') throw publicError('AUTH_FAILED', '请先在北大身份认证页面激活账号（E02）。');
+      if (errorCode === 'E01') throw publicError('AUTH_FAILED', '北大统一认证未接受本次账号密码校验（E01）。可先在统一认证官网确认账号状态，再返回同步。');
+      throw publicError('AUTH_FAILED', '北大认证未通过' + codeLabel + '。请将错误码用于排查连接器。');
     }
     if (typeof result.token !== 'string' || !result.token || result.token.length > 8192 || /[\r\n\u0000]/.test(result.token)) {
       throw publicError('UPSTREAM', '北大身份认证未返回有效的登录凭据。');
@@ -371,6 +416,7 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
     const byId = new Map();
     const excludedIds = new Set();
     let unknownCalendars = 0;
+    const schemaHints = new Set();
     for (const calendar of payload.calendars) {
       if (!calendar || typeof calendar.id !== 'string' || !calendar.id.trim() || calendar.id.length > 256 || /[\u0000-\u001f\u007f,]/.test(calendar.id)) {
         throw publicError('UNSUPPORTED', '教学网日历目录存在无法识别的记录，尚未读取到完整课程列表。');
@@ -379,7 +425,7 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
       if (['PERSONAL', 'INSTITUTION', 'ORGANIZATION'].includes(id.toUpperCase())) { excludedIds.add(id); continue; }
       if (calendar.calendarType && !/^course$/i.test(calendar.calendarType)) {
         if (/^(personal|institution|organization)$/i.test(calendar.calendarType)) excludedIds.add(id);
-        else unknownCalendars++;
+        else { unknownCalendars++; schemaHints.add('日历类型=' + safeTypeLabel(calendar.calendarType)); }
         continue;
       }
       byId.set(id, calendar);
@@ -400,6 +446,7 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
     let unknownItems = 0;
     let unknownTypes = 0;
     let seenRows = 0;
+    let assumedTimezone = false;
     for (let from = start; from < end;) {
       const month = new Date(from + 8 * 3600000);
       const nextMonth = Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1) - 8 * 3600000;
@@ -416,21 +463,30 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
             throw publicError('UNSUPPORTED', '教学网日历事件缺少可识别的类型或课程信息，请保留现有任务。');
           }
           if (excludedIds.has(event.calendarId) || ['PERSONAL', 'INSTITUTION', 'ORGANIZATION'].includes(event.calendarId.toUpperCase())) continue;
-          if (!byId.has(event.calendarId)) { unknownItems++; continue; }
-          // Blackboard Assignment events represent assignment due dates. A
+          if (!byId.has(event.calendarId)) { unknownItems++; schemaHints.add('事项课程编号未列入日历'); continue; }
+          // PKU localizes the Assignment type to “作业”. Both identify DDLs. A
           // meeting/test/course event is never guessed to be a movable task.
-          if (event.eventType.toLowerCase() !== 'assignment') {
-            if (!/^(personal|institution|organization|course|event|calendarevent|test|survey|meeting|officehours)$/i.test(event.eventType)) unknownTypes++;
+          if (!/^(assignment|作业)$/i.test(event.eventType.trim())) {
+            if (!/^(personal|institution|organization|course|event|calendarevent|test|survey|meeting|officehours|个人|机构|课程|事件|测试|考试|调查|会议)$/i.test(event.eventType.trim())) { unknownTypes++; schemaHints.add('事项类型=' + safeTypeLabel(event.eventType)); }
             continue;
           }
           const rawStable = event.itemSourceId || event.id;
           const stable = typeof rawStable === 'string' && rawStable.length <= 256 ? cleanText(rawStable, 256) : '';
           const title = cleanText(event.title, 200);
-          if (!stable || !title) { unknownItems++; continue; }
-          const rawDue = event.dueDate == null ? (event.end == null ? event.endDate : event.end) : event.dueDate;
+          if (!stable || !title) { unknownItems++; schemaHints.add(!stable ? '事项编号缺失或类型不符' : '标题缺失'); continue; }
+          const rawDue = event.dueDate == null ? (event.endDate == null ? event.end : event.endDate) : event.dueDate;
           const date = parseDate(rawDue);
-          if (!date || (event.allDay === true && !/^\d{4}-\d{2}-\d{2}$/.test(rawDue))) { unknownDates++; continue; }
+          if (!date || (event.allDay === true && !/^\d{4}-\d{2}-\d{2}$/.test(rawDue))) {
+            unknownDates++;
+            schemaHints.add('日期=' + dateShape(rawDue));
+            if (event.allDay === true) schemaHints.add('全天事项');
+            if (rawDue == null) {
+              for (const field of ['due', 'start', 'startDate', 'end', 'endDate', 'dueDate']) if (Object.hasOwn(event, field)) schemaHints.add(field + '=' + dateShape(event[field]));
+            }
+            continue;
+          }
           if (date.epoch < start || date.epoch > end) continue;
+          if (date.assumedZone) assumedTimezone = true;
           const calendar = byId.get(event.calendarId);
           const course = cleanText(event.calendarName, 200) ||
             cleanText(event.calendarNameLocalizable && event.calendarNameLocalizable.rawValue, 200) ||
@@ -443,10 +499,13 @@ function createClient({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs 
       from = to;
     }
     const warnings = [];
+    if (assumedTimezone) warnings.push('部分 DDL 未注明时区，已按北京时间保留原日期和时刻；请与教学网核对后确认合并。');
     if (unknownDates) warnings.push('有作业的截止时间或时区不明确，已跳过；请在教学网核对。');
     if (unknownItems) warnings.push('有作业的课程、稳定编号或标题无法识别，已跳过；请在教学网核对。');
     if (unknownCalendars || unknownTypes) warnings.push('教学网返回了尚未适配的日历类型，部分截止时间需在教学网核对。');
-    if ((unknownDates || unknownItems || unknownCalendars || unknownTypes) && !items.size) throw publicError('UNSUPPORTED', '教学网作业数据尚无法准确解析，现有任务保持不变。');
+    if ((unknownDates || unknownItems || unknownCalendars || unknownTypes) && !items.size) {
+      throw publicError('UNSUPPORTED', '教学网作业数据尚无法准确解析。格式诊断：日期异常 ' + unknownDates + '，编号异常 ' + unknownItems + '，日历类型异常 ' + unknownCalendars + '，事项类型异常 ' + unknownTypes + '；' + [...schemaHints].sort().slice(0, 8).join('，') + '。现有任务保持不变。');
+    }
     if (!byId.size) warnings.push('教学网未返回可读取的课程日历。');
     return { items: [...items.values()].sort((a, b) => a.due.localeCompare(b.due) || a.sourceId.localeCompare(b.sourceId)), warnings };
   }
