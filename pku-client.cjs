@@ -88,9 +88,11 @@ function safeTypeLabel(value) {
   if (typeof value !== 'string') return '非文本类型';
   const known = labels.get(value.toLowerCase().replace(/[_ -]/g, '')) || labels.get(value.split(/[.:$]/).pop().toLowerCase().replace(/[_ -]/g, ''));
   if (known) return known;
-  // Blackboard's type field is a system enum, separate from title/course/ID.
-  // Expose only short enum-like words, never arbitrary text or identifiers.
-  return /^[\p{L}_]{1,40}$/u.test(value) ? value : /^\d$/.test(value) ? '数字枚举' + value : '其他类型';
+  const localized = new Set(['作业', '个人', '机构', '课程', '事件', '测试', '考试', '调查', '会议']);
+  if (localized.has(value.trim())) return value.trim();
+  // Unknown upstream values may contain private text even in a type field.
+  // Only known system labels are safe to include in shareable diagnostics.
+  return /^\d$/.test(value) ? '数字枚举' : '未知文本类型';
 }
 
 function parseDate(value) {

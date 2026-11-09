@@ -164,13 +164,15 @@ test('calendar schema diagnostics describe types without reporting account, titl
   for (const options of [
     { events: [{ ...assignment, end: PASSWORD, title: USER }] },
     { events: [{ ...assignment, eventType: 'GradebookColumn', title: PASSWORD }] },
+    { events: [{ ...assignment, eventType: 'PrivateAccount' }] },
+    { events: [{ ...assignment, eventType: '虚构私人内容' }] },
     { calendars: { calendars: [{ id: USER, calendarType: PASSWORD }] } },
     { events: [{ ...assignment, calendarId: USER, title: PASSWORD }] }
   ]) {
     const { client } = await loggedIn(options);
     await assert.rejects(client.readDeadlines(USER), error => {
       assert.ok(safeFailure('UNSUPPORTED')(error)); assert.match(error.publicMessage, /格式诊断/);
-      assert.doesNotMatch(error.publicMessage, /fake-calendar-event|2026-11/); return true;
+      assert.doesNotMatch(error.publicMessage, /fake-calendar-event|2026-11|PrivateAccount|虚构私人内容/); return true;
     });
     client.close();
   }
